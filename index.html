@@ -1,0 +1,2990 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Silsilah Keluarga & Kerajaan Interaktif — Hingga 100 Keturunan</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #f1f5f9 100%);
+            color: #0f172a;
+            overflow: hidden;
+        }
+
+        /* Kanvas Pohon Silsilah & Garis Penghubung Atas-ke-Bawah */
+        #canvas-viewport {
+            cursor: grab;
+            user-select: none;
+            background-image:
+                radial-gradient(rgba(99, 102, 241, 0.16) 1.25px, transparent 1.25px),
+                radial-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px);
+            background-size: 32px 32px, 16px 16px;
+            background-position: 0 0, 16px 16px;
+        }
+        #canvas-viewport:active {
+            cursor: grabbing;
+        }
+
+        #tree-zoom-wrapper {
+            transform-origin: top center;
+            transition: transform 0.15s ease-out;
+            display: inline-flex;
+            justify-content: center;
+            min-width: 100%;
+            padding: 48px 72px 170px 72px;
+        }
+
+        .tree ul {
+            padding-top: 28px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            margin: 0;
+            padding-left: 0;
+        }
+
+        .tree > ul {
+            padding-top: 0;
+        }
+
+        .tree li {
+            text-align: center;
+            list-style-type: none;
+            position: relative;
+            padding: 28px 10px 0 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .tree > ul > li {
+            padding-top: 0;
+        }
+
+        /* Garis horizontal dan vertikal antar saudara */
+        .tree li::before,
+        .tree li::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 50%;
+            border-top: 2px solid #94a3b8;
+            width: 50%;
+            height: 28px;
+            transition: border-color 0.25s ease;
+        }
+
+        .tree li::after {
+            right: auto;
+            left: 50%;
+            border-left: 2px solid #94a3b8;
+        }
+
+        /* Hapus garis berlebih pada anak pertama dan terakhir */
+        .tree li:first-child::before,
+        .tree li:last-child::after {
+            border: 0 none;
+        }
+
+        .tree li:last-child::before {
+            border-right: 2px solid #94a3b8;
+            border-radius: 0 10px 0 0;
+        }
+
+        .tree li:first-child::after {
+            border-radius: 10px 0 0 0;
+        }
+
+        /* Penanganan khusus jika hanya memiliki 1 anak (tetap lurus dari atas ke bawah) */
+        .tree li:only-child::before {
+            display: none;
+        }
+
+        .tree li:only-child::after {
+            border-top: none;
+            border-left: 2px solid #94a3b8;
+            border-radius: 0;
+            width: 0;
+            height: 28px;
+            left: 50%;
+        }
+
+        .tree > ul > li:only-child::after {
+            display: none;
+        }
+
+        /* Garis vertikal turun dari kartu induk ke percabangan anak */
+        .tree ul ul::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            border-left: 2px solid #94a3b8;
+            width: 0;
+            height: 28px;
+            transition: border-color 0.25s ease;
+        }
+
+        /* Gaya Kartu Anggota Keluarga */
+        .member-card {
+            position: relative;
+            z-index: 10;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            backdrop-filter: blur(8px);
+        }
+        .member-card:hover {
+            transform: translateY(-3px);
+        }
+
+        /* Kartu Khusus Pemimpin Kerajaan */
+        .royal-leader-card {
+            background: linear-gradient(180deg, #fffbeb 0%, #ffffff 36%) !important;
+            box-shadow: 0 10px 25px -5px rgba(217, 119, 6, 0.18), 0 4px 10px -2px rgba(15, 23, 42, 0.06);
+        }
+
+        /* Mode Sorotan Silsilah (Highlight Path) */
+        .tree.has-highlight .member-card:not(.highlighted-node) {
+            opacity: 0.32;
+            filter: grayscale(45%);
+        }
+        .member-card.highlighted-node {
+            box-shadow: 0 0 0 4px #f59e0b, 0 16px 30px -6px rgba(245, 158, 11, 0.4);
+            transform: scale(1.03);
+        }
+
+        /* Tombol Tambah Generasi di Atas Root */
+        .add-above-btn {
+            position: relative;
+            z-index: 15;
+        }
+        .add-above-connector {
+            width: 2px;
+            height: 22px;
+            background: linear-gradient(to bottom, #6366f1, #94a3b8);
+            margin: 0 auto;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Pengaturan Khusus Saat Mencetak (Print / Save as PDF) */
+        @media print {
+            @page {
+                size: landscape;
+                margin: 12mm;
+            }
+            body {
+                background: #ffffff !important;
+                overflow: visible !important;
+                height: auto !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            header,
+            .no-print,
+            #toast-container {
+                display: none !important;
+            }
+            #canvas-viewport {
+                overflow: visible !important;
+                background: #ffffff !important;
+                height: auto !important;
+                position: static !important;
+            }
+            #tree-zoom-wrapper {
+                transform: none !important;
+                padding: 10px !important;
+                display: block !important;
+            }
+            .member-card {
+                box-shadow: none !important;
+                break-inside: avoid;
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- Header & Bilah Alat Utama -->
+    <header class="bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm z-30 px-3 sm:px-6 py-3">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <!-- Judul & Statistik Singkat -->
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight leading-tight">
+                        Silsilah Keluarga & Kerajaan
+                    </h1>
+                    <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
+                        <span>Total: <strong id="stat-total" class="text-slate-800">0</strong> Anggota</span>
+                        <span>•</span>
+                        <span>Kedalaman: <strong id="stat-depth" class="text-indigo-600">1</strong> / 100 Gen</span>
+                        <span id="stat-leaders-wrap" class="hidden sm:inline-flex items-center gap-1 text-amber-700 font-semibold">
+                            <span>•</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-amber-500 inline" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 18h18v2H3v-2zm16.5-11L16 11l-4-6-4 6-3.5-4L3 16h18l-1.5-9z"/>
+                            </svg>
+                            <span id="stat-leaders">0</span> Pemimpin
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kolom Pencarian Cepat -->
+            <div class="relative flex-1 min-w-[210px] max-w-sm">
+                <div class="relative">
+                    <input type="text" id="quick-search-input" placeholder="Cari nama, gelar kerajaan, atau generasi..."
+                        class="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-slate-100/90 border border-slate-200 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <button type="button" id="clear-search-btn" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm font-bold">&times;</button>
+                </div>
+                <div id="search-results-dropdown" class="hidden absolute left-0 right-0 mt-1.5 bg-white rounded-2xl shadow-xl border border-slate-200 max-h-72 overflow-y-auto z-40"></div>
+            </div>
+
+            <!-- Tombol Aksi Utama -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" id="open-checker-btn"
+                    class="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm flex items-center gap-1.5 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    <span>Cek Silsilah</span>
+                </button>
+
+                <button type="button" id="download-png-btn"
+                    class="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm flex items-center gap-1.5 transition"
+                    title="Unduh Bagan sebagai Gambar PNG">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    <span class="hidden sm:inline">Unduh PNG</span>
+                </button>
+
+                <button type="button" id="print-tree-btn"
+                    class="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm flex items-center gap-1.5 transition"
+                    title="Cetak Silsilah atau Simpan sebagai PDF">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    <span class="hidden sm:inline">Cetak</span>
+                </button>
+
+                <button type="button" id="open-tools-btn"
+                    class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 flex items-center gap-1.5 transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Kelola Data</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Banner Status Sorotan Jalur Silsilah -->
+    <div id="highlight-banner" class="no-print hidden bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs sm:text-sm text-amber-950 flex items-center justify-between gap-2 z-20">
+        <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0"></span>
+            <span>Menyoroti Jalur Silsilah: <strong id="highlight-target-name"></strong></span>
+        </div>
+        <button type="button" id="clear-highlight-btn" class="px-3 py-1 bg-amber-200/80 hover:bg-amber-300 text-amber-950 text-xs font-semibold rounded-lg transition shrink-0">
+            Tampilkan Semua
+        </button>
+    </div>
+
+    <!-- Kanvas Utama Pohon Silsilah (Atas ke Bawah) -->
+    <main id="canvas-viewport" class="flex-1 overflow-auto relative">
+        <div id="tree-zoom-wrapper">
+            <div id="family-tree-root" class="tree"></div>
+        </div>
+    </main>
+
+    <!-- Kontrol Zoom Melayang di Sudut Kanan Bawah -->
+    <div class="no-print fixed bottom-4 right-4 z-30 flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-2xl shadow-lg border border-slate-200">
+        <button type="button" id="zoom-out-btn" title="Perkecil Tampilan" class="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-700 font-bold text-base flex items-center justify-center transition">−</button>
+        <span id="zoom-level-label" class="px-2 text-xs font-semibold text-slate-700 min-w-[46px] text-center">100%</span>
+        <button type="button" id="zoom-in-btn" title="Perbesar Tampilan" class="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-700 font-bold text-base flex items-center justify-center transition">+</button>
+        <div class="w-px h-5 bg-slate-200 mx-0.5"></div>
+        <button type="button" id="zoom-reset-btn" title="Kembali ke Puncak Silsilah" class="px-2.5 h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition">
+            Pusatkan
+        </button>
+    </div>
+
+    <!-- Modal 1: Tambah / Edit Anggota Keluarga -->
+    <div id="member-modal" class="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div>
+                    <h2 id="member-modal-title" class="text-lg font-bold text-slate-800">Tambah Keturunan Baru</h2>
+                    <p id="member-modal-subtitle" class="text-xs text-slate-500 mt-0.5">Generasi ke-2</p>
+                </div>
+                <button type="button" class="close-member-modal text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+            </div>
+
+            <form id="member-form" class="p-6 space-y-4 overflow-y-auto">
+                <input type="hidden" id="form-mode" value="add">
+                <input type="hidden" id="form-target-id" value="">
+
+                <!-- Pilihan Pasangan Orang Tua (Untuk Menentukan Keturunan dari Pasangan Mana) -->
+                <div id="parent-spouse-selector-box" class="hidden bg-indigo-50/70 p-3.5 rounded-xl border border-indigo-200/80 space-y-1.5">
+                    <label for="input-parent-spouse" class="block text-xs font-semibold text-indigo-900 uppercase tracking-wider">
+                        Keturunan dari Pasangan (Ibu / Ayah)
+                    </label>
+                    <select id="input-parent-spouse"
+                        class="w-full px-3 py-2 text-xs sm:text-sm bg-white border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                    <p id="parent-spouse-hint" class="text-[11px] text-indigo-700 leading-relaxed"></p>
+                </div>
+
+                <!-- Kolom Nama Lengkap -->
+                <div>
+                    <label id="label-input-name" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Nama Lengkap *</label>
+                    <input type="text" id="input-name" required placeholder="Contoh: Hamengkubuwono IX / Budi Santoso"
+                        class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <!-- Kolom Gelar Kerajaan (Tepat Sesudah Kolom Nama dengan Input Langsung) -->
+                <div class="bg-gradient-to-br from-amber-50/90 to-yellow-50/70 p-3.5 rounded-xl border border-amber-300/80 space-y-2.5">
+                    <div>
+                        <label for="input-royal-title" class="flex items-center justify-between text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
+                            <span>👑 Gelar Kerajaan (Input Langsung)</span>
+                            <span class="text-[10px] font-medium normal-case text-amber-700">Opsional</span>
+                        </label>
+                        <input type="text" id="input-royal-title" list="royal-title-presets"
+                            placeholder="Ketik gelar langsung: Sri Sultan, Raja, Ratu, Raden Mas, Gusti..."
+                            class="w-full px-3.5 py-2.5 text-sm bg-white border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <datalist id="royal-title-presets">
+                            <option value="Sri Sultan">
+                            <option value="Sultan">
+                            <option value="Raja">
+                            <option value="Ratu">
+                            <option value="Maharaja">
+                            <option value="Kaisar">
+                            <option value="Permaisuri">
+                            <option value="Sunan / Susuhunan">
+                            <option value="Kanjeng Pangeran">
+                            <option value="Pangeran">
+                            <option value="Gusti Kanjeng Ratu">
+                            <option value="Gusti Raden Ayu">
+                            <option value="Gusti">
+                            <option value="Raden Mas">
+                            <option value="Raden Ajeng">
+                            <option value="Raden Ayu">
+                            <option value="Raden Roro">
+                            <option value="Raden">
+                            <option value="Teuku">
+                            <option value="Cut">
+                            <option value="Tengku">
+                            <option value="Datuk">
+                            <option value="Sutan">
+                            <option value="Andi">
+                            <option value="Daeng">
+                            <option value="Lalu">
+                            <option value="Baiq">
+                            <option value="Anak Agung">
+                            <option value="Cokorda">
+                            <option value="I Gusti">
+                        </datalist>
+                    </div>
+
+                    <!-- Penanda Pemimpin Kerajaan dengan Ikon Mahkota -->
+                    <label class="flex items-center gap-3 p-2.5 bg-white/95 hover:bg-amber-100/50 rounded-xl border border-amber-200 cursor-pointer transition select-none">
+                        <input type="checkbox" id="input-is-royal-leader" class="w-4 h-4 accent-amber-600 rounded cursor-pointer shrink-0">
+                        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 to-yellow-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 18h18v2H3v-2zm16.5-11L16 11l-4-6-4 6-3.5-4L3 16h18l-1.5-9z"/>
+                            </svg>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-xs font-bold text-amber-950">Pemimpin Kerajaan (Ikon Mahkota)</div>
+                            <div class="text-[11px] text-amber-700 leading-tight">Tampilkan mahkota emas untuk Raja / Ratu / Sultan</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Jenis Kelamin *</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="member-gender" id="gender-radio-male" value="male" class="peer sr-only" checked>
+                            <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-blue-600 peer-checked:bg-blue-50/70 transition">
+                                <span class="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">♂</span>
+                                <span class="text-sm font-semibold text-slate-700">Laki-laki</span>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="member-gender" id="gender-radio-female" value="female" class="peer sr-only">
+                            <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-rose-600 peer-checked:bg-rose-50/70 transition">
+                                <span class="w-7 h-7 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold text-sm">♀</span>
+                                <span class="text-sm font-semibold text-slate-700">Perempuan</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Pasangan Pertama (Saat Tambah Baru) -->
+                <div id="add-initial-spouse-box" class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                    <label id="label-initial-spouse" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider">Pasangan Suami / Istri (Opsional)</label>
+                    <input type="text" id="input-spouse" placeholder="Nama Suami / Istri"
+                        class="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input type="text" id="input-spouse-royal-title" list="royal-title-presets"
+                        placeholder="👑 Gelar Kerajaan Pasangan (opsional, misal: Permaisuri, Raden Ayu)"
+                        class="w-full px-3 py-2 text-xs bg-amber-50/50 border border-amber-300/80 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-amber-500">
+                    <div class="grid grid-cols-2 gap-2">
+                        <select id="input-spouse-gender" class="px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl">
+                            <option value="female">Pasangan: Perempuan (♀)</option>
+                            <option value="male">Pasangan: Laki-laki (♂)</option>
+                        </select>
+                        <input type="text" id="input-spouse-note" placeholder="Ket: Istri / Suami"
+                            class="px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl">
+                    </div>
+                </div>
+
+                <!-- Daftar Pasangan Saat Mode Edit -->
+                <div id="edit-spouses-manager" class="hidden bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-semibold text-slate-700 uppercase tracking-wider">Daftar Pasangan (Suami / Istri)</label>
+                        <button type="button" id="edit-modal-add-spouse-btn" class="text-xs font-bold text-indigo-600 hover:text-indigo-800">
+                            + Tambah Pasangan
+                        </button>
+                    </div>
+                    <div id="edit-spouses-list" class="space-y-2"></div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Tahun Lahir</label>
+                        <input type="text" id="input-birth" placeholder="Contoh: 1985"
+                            class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Tahun Wafat / Status</label>
+                        <input type="text" id="input-death" placeholder="Kosongkan jika hidup"
+                            class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Catatan / Domisili / Keterangan</label>
+                    <input type="text" id="input-notes" placeholder="Contoh: Anak ke-1, Domisili Keraton Yogyakarta"
+                        class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" class="close-member-modal px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition">Batal</button>
+                    <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-sm transition">Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 2: Tambah Pasangan Suami / Istri Baru -->
+    <div id="spouse-modal" class="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-200 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Tambah Pasangan Baru</h2>
+                    <p id="spouse-modal-subtitle" class="text-xs text-slate-600">Pasangan Suami / Istri</p>
+                </div>
+                <button type="button" id="close-spouse-modal-btn" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+            </div>
+
+            <form id="spouse-form" class="p-6 space-y-4">
+                <input type="hidden" id="spouse-member-id" value="">
+
+                <!-- Pilihan Sumber Pasangan: Luar Silsilah vs Anggota Silsilah (Antar Generasi) -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Asal Pasangan</label>
+                    <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                        <button type="button" id="spouse-source-external-btn"
+                            class="py-2 px-2.5 text-xs font-bold rounded-lg bg-white text-slate-800 shadow-xs transition">
+                            Luar Silsilah (Baru)
+                        </button>
+                        <button type="button" id="spouse-source-internal-btn"
+                            class="py-2 px-2.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition">
+                            Anggota Silsilah (Antar Gen)
+                        </button>
+                    </div>
+                    <input type="hidden" id="spouse-source-mode" value="external">
+                </div>
+
+                <!-- Mode A: Input Manual Pasangan dari Luar -->
+                <div id="external-spouse-fields" class="space-y-3.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Nama Pasangan (Suami / Istri) *</label>
+                        <input type="text" id="new-spouse-name" placeholder="Contoh: Siti Rahmawati"
+                            class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    </div>
+
+                    <div class="bg-amber-50/70 p-3 rounded-xl border border-amber-300/80 space-y-2">
+                        <div>
+                            <label for="new-spouse-royal-title" class="block text-xs font-bold text-amber-900 uppercase tracking-wider mb-1">
+                                👑 Gelar Kerajaan Pasangan (Input Langsung)
+                            </label>
+                            <input type="text" id="new-spouse-royal-title" list="royal-title-presets"
+                                placeholder="Ketik gelar: Permaisuri, Ratu, Sultan, Raden Ayu, Gusti..."
+                                class="w-full px-3.5 py-2 text-sm bg-white border border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        </div>
+                        <label class="flex items-center gap-2.5 text-xs font-semibold text-amber-950 cursor-pointer select-none">
+                            <input type="checkbox" id="new-spouse-is-royal-leader" class="w-4 h-4 accent-amber-600 rounded">
+                            <span>👑 Tandai Pasangan sebagai Pemimpin Kerajaan (Ikon Mahkota)</span>
+                        </label>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Jenis Kelamin Pasangan *</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="spouse-gender" id="spouse-radio-male" value="male" class="peer sr-only">
+                                <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-blue-600 peer-checked:bg-blue-50/70 transition">
+                                    <span class="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">♂</span>
+                                    <span class="text-sm font-semibold text-slate-700">Laki-laki (Suami)</span>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="spouse-gender" id="spouse-radio-female" value="female" class="peer sr-only" checked>
+                                <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl border-2 border-slate-200 peer-checked:border-rose-600 peer-checked:bg-rose-50/70 transition">
+                                    <span class="w-7 h-7 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-bold text-sm">♀</span>
+                                    <span class="text-sm font-semibold text-slate-700">Perempuan (Istri)</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mode B: Pilih Pasangan dari Anggota di Dalam Pohon Silsilah (Pernikahan Antar Generasi) -->
+                <div id="internal-spouse-fields" class="hidden space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Pilih Anggota Keluarga di Silsilah *</label>
+                        <select id="internal-spouse-select"
+                            class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"></select>
+                    </div>
+                    <div id="internal-spouse-kinship-preview" class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-950 space-y-1"></div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Status / Keterangan Pernikahan</label>
+                    <input type="text" id="new-spouse-note" placeholder="Contoh: Istri ke-1, Suami, Pernikahan Antar Generasi"
+                        class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500">
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" id="cancel-spouse-btn" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition">Batal</button>
+                    <button type="submit" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-xl shadow-sm transition">Tambahkan Pasangan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal 3: Cek Silsilah & Hubungan Keluarga -->
+    <div id="checker-modal" class="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 flex items-center justify-between shrink-0">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-800">Cek Silsilah & Hubungan Keluarga</h2>
+                    <p class="text-xs text-slate-600">Lacak garis keturunan, hubungan nasab, semenda & pernikahan antar generasi</p>
+                </div>
+                <button type="button" id="close-checker-btn" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+            </div>
+
+            <!-- Tab Navigasi Checker -->
+            <div class="px-6 pt-3 border-b border-slate-200 bg-slate-50/70 flex flex-wrap gap-1.5 shrink-0">
+                <button type="button" id="tab-lineage-btn" class="px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-t border-x border-slate-200 bg-white text-indigo-600 -mb-px">
+                    Lacak Jalur Silsilah
+                </button>
+                <button type="button" id="tab-relation-btn" class="px-3.5 py-2.5 text-xs sm:text-sm font-medium rounded-t-xl text-slate-600 hover:text-slate-900">
+                    Cek Hubungan 2 Anggota
+                </button>
+                <button type="button" id="tab-intergen-btn" class="px-3.5 py-2.5 text-xs sm:text-sm font-medium rounded-t-xl text-slate-600 hover:text-slate-900">
+                    Pernikahan Antar Generasi
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-5">
+                <!-- Panel 1: Lacak Jalur Silsilah -->
+                <div id="panel-lineage" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Pilih Anggota Keluarga:</label>
+                        <select id="select-lineage-member" class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                    </div>
+                    <div id="lineage-result-box" class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-4"></div>
+                </div>
+
+                <!-- Panel 2: Cek Hubungan 2 Anggota -->
+                <div id="panel-relation" class="hidden space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Anggota Pertama (A):</label>
+                            <select id="select-rel-a" class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Anggota Kedua (B):</label>
+                            <select id="select-rel-b" class="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                        </div>
+                    </div>
+                    <div id="relation-result-box" class="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-4 space-y-2.5"></div>
+                </div>
+
+                <!-- Panel 3: Daftar Pernikahan Antar Generasi & Kekerabatan -->
+                <div id="panel-intergen" class="hidden space-y-4">
+                    <div class="bg-violet-50 border border-violet-200 rounded-2xl p-3.5 text-xs text-violet-900 leading-relaxed">
+                        Daftar di bawah ini menampilkan pasangan suami/istri yang berasal dari dalam rumpun keluarga ini beserta analisis hubungan kekerabatan akibat <strong>pernikahan antar generasi</strong> maupun sesama generasi.
+                    </div>
+                    <div id="intergen-list-box" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 4: Kelola Data & Generator Rantai 100 Keturunan -->
+    <div id="tools-modal" class="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-slate-800">Kelola Data, Unduh & Generator Generasi</h2>
+                <button type="button" id="close-tools-btn" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+            </div>
+
+            <div class="p-6 space-y-5">
+                <!-- Generator Cepat hingga 100 Generasi -->
+                <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 space-y-3">
+                    <h3 class="text-sm font-bold text-indigo-900">Tambah Rantai Keturunan Otomatis (Maks. 100)</h3>
+                    <p class="text-xs text-indigo-700 leading-relaxed">
+                        Ingin langsung membuat jalur keturunan panjang dari atas ke bawah hingga generasi ke-100? Pilih jumlah generasi target dan anggota awal di bawah ini.
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-indigo-900 mb-1">Mulai dari Anggota:</label>
+                            <select id="gen-chain-start" class="w-full px-3 py-2 text-xs border border-indigo-200 rounded-xl bg-white"></select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-indigo-900 mb-1">Sampai Generasi Ke- (2–100):</label>
+                            <input type="number" id="gen-chain-target" min="2" max="100" value="10"
+                                class="w-full px-3 py-2 text-xs border border-indigo-200 rounded-xl bg-white">
+                        </div>
+                    </div>
+                    <button type="button" id="run-chain-gen-btn" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm transition">
+                        Buat Rantai Keturunan Sekarang
+                    </button>
+                </div>
+
+                <!-- Ekspor / Impor / Cetak -->
+                <div class="space-y-2.5">
+                    <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Unduh, Cetak & Cadangkan Data</h3>
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button type="button" id="tools-download-png-btn" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition">
+                            <span>Unduh Gambar (.PNG)</span>
+                        </button>
+                        <button type="button" id="tools-print-btn" class="py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition">
+                            <span>Cetak / Simpan PDF</span>
+                        </button>
+                        <button type="button" id="export-json-btn" class="py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition">
+                            <span>Unduh Backup (.JSON)</span>
+                        </button>
+                        <label class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer border border-slate-300 transition">
+                            <span>Muat Backup (.JSON)</span>
+                            <input type="file" id="import-json-input" accept=".json" class="hidden">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Reset Pohon -->
+                <div class="pt-3 border-t border-slate-200 flex items-center justify-between">
+                    <span class="text-xs text-slate-500">Ingin mulai dari kosong?</span>
+                    <button type="button" id="reset-tree-btn" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold rounded-xl border border-rose-200 transition">
+                        Mulai Pohon Baru (1 Anggota)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 5: Konfirmasi Hapus Kustom -->
+    <div id="confirm-modal" class="no-print fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-slate-100">
+            <h3 id="confirm-title" class="text-base font-bold text-slate-900">Konfirmasi</h3>
+            <p id="confirm-message" class="text-xs sm:text-sm text-slate-600 leading-relaxed"></p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" id="confirm-cancel-btn" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-medium rounded-xl transition">Batal</button>
+                <button type="button" id="confirm-ok-btn" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-sm transition">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifikasi -->
+    <div id="toast-container" class="no-print fixed bottom-4 left-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <script>
+        // =========================================================================
+        // STATE & DATA AWAL APLIKASI SILSILAH KELUARGA (MAKSIMAL 100 KETURUNAN)
+        // =========================================================================
+        const MAX_GENERATIONS = 100;
+        let idCounter = 20;
+        let currentZoom = 1;
+        let highlightedNodeIds = new Set();
+        let confirmCallback = null;
+
+        // Pola kata kunci otomatis untuk gelar Pemimpin Kerajaan
+        const ROYAL_LEADER_KEYWORDS = [
+            'sultan', 'sri sultan', 'raja', 'ratu', 'maharaja', 'maharani',
+            'kaisar', 'permaisuri', 'sunan', 'susuhunan', 'hamengkubuwono',
+            'pakubuwono', 'mangkunegara', 'pakualam', 'adipati', 'datu',
+            'yang di-pertuan', 'yang dipertuan', 'king', 'queen', 'emperor'
+        ];
+
+        function isLeaderTitleString(title) {
+            if (!title) return false;
+            const lower = title.trim().toLowerCase();
+            return ROYAL_LEADER_KEYWORDS.some(kw => lower.includes(kw));
+        }
+
+        // Data contoh 4 generasi dengan Gelar Kerajaan & Pemimpin Kerajaan
+        let familyState = {
+            rootId: 'm-1',
+            nodes: {
+                'm-1': {
+                    id: 'm-1',
+                    name: 'H. Ahmad Wijaya',
+                    royalTitle: 'Sri Sultan Wijaya I',
+                    isRoyalLeader: true,
+                    spouses: [
+                        { id: 'sp-1', name: 'Hj. Siti Aminah', royalTitle: 'Permaisuri', isRoyalLeader: false, gender: 'female', note: 'Istri' }
+                    ],
+                    gender: 'male',
+                    birthYear: '1935',
+                    deathYear: '2012',
+                    notes: 'Pendiri & Pemimpin Utama Kerajaan',
+                    parentId: null,
+                    parentSpouseId: null,
+                    childrenIds: ['m-2', 'm-3'],
+                    collapsed: false
+                },
+                'm-2': {
+                    id: 'm-2',
+                    name: 'Ir. Bambang Wijaya',
+                    royalTitle: 'Sri Sultan Wijaya II',
+                    isRoyalLeader: true,
+                    spouses: [
+                        { id: 'sp-2', name: 'Ratna Sari', royalTitle: 'Raden Ayu', isRoyalLeader: false, gender: 'female', note: 'Istri' }
+                    ],
+                    gender: 'male',
+                    birthYear: '1960',
+                    deathYear: '',
+                    notes: 'Anak Pertama • Penerus Takhta',
+                    parentId: 'm-1',
+                    parentSpouseId: 'sp-1',
+                    childrenIds: ['m-4', 'm-5'],
+                    collapsed: false
+                },
+                'm-3': {
+                    id: 'm-3',
+                    name: 'Dra. Sri Wahyuni',
+                    royalTitle: 'Gusti Kanjeng Ratu',
+                    isRoyalLeader: false,
+                    spouses: [
+                        { id: 'sp-3', name: 'Drs. Hendra Kusuma', royalTitle: 'Kanjeng Pangeran', isRoyalLeader: false, gender: 'male', note: 'Suami' }
+                    ],
+                    gender: 'female',
+                    birthYear: '1964',
+                    deathYear: '',
+                    notes: 'Anak Kedua • Yogyakarta',
+                    parentId: 'm-1',
+                    parentSpouseId: 'sp-1',
+                    childrenIds: ['m-6'],
+                    collapsed: false
+                },
+                'm-4': {
+                    id: 'm-4',
+                    name: 'Andi Pratama Wijaya',
+                    royalTitle: 'Pangeran Adipati',
+                    isRoyalLeader: false,
+                    spouses: [
+                        { id: 'sp-4', name: 'Nadia Putri', royalTitle: 'Raden Ajeng', isRoyalLeader: false, gender: 'female', note: 'Istri' }
+                    ],
+                    gender: 'male',
+                    birthYear: '1988',
+                    deathYear: '',
+                    notes: 'Cucu Pertama • Putra Mahkota',
+                    parentId: 'm-2',
+                    parentSpouseId: 'sp-2',
+                    childrenIds: ['m-7'],
+                    collapsed: false
+                },
+                'm-5': {
+                    id: 'm-5',
+                    name: 'Dina Maharani',
+                    royalTitle: 'Raden Ayu',
+                    isRoyalLeader: false,
+                    spouses: [
+                        { id: 'sp-5', name: 'Rizky Ramadhan', royalTitle: '', isRoyalLeader: false, gender: 'male', note: 'Suami' }
+                    ],
+                    gender: 'female',
+                    birthYear: '1992',
+                    deathYear: '',
+                    notes: 'Cucu Kedua • Surabaya',
+                    parentId: 'm-2',
+                    parentSpouseId: 'sp-2',
+                    childrenIds: [],
+                    collapsed: false
+                },
+                'm-6': {
+                    id: 'm-6',
+                    name: 'Fajar Kusuma',
+                    royalTitle: 'Raden Mas',
+                    isRoyalLeader: false,
+                    spouses: [],
+                    gender: 'male',
+                    birthYear: '1995',
+                    deathYear: '',
+                    notes: 'Cucu Ketiga • Yogyakarta',
+                    parentId: 'm-3',
+                    parentSpouseId: 'sp-3',
+                    childrenIds: [],
+                    collapsed: false
+                },
+                'm-7': {
+                    id: 'm-7',
+                    name: 'Alya Zahra Wijaya',
+                    royalTitle: 'Raden Roro',
+                    isRoyalLeader: false,
+                    spouses: [],
+                    gender: 'female',
+                    birthYear: '2018',
+                    deathYear: '',
+                    notes: 'Cicit Pertama (Generasi ke-4)',
+                    parentId: 'm-4',
+                    parentSpouseId: 'sp-4',
+                    childrenIds: [],
+                    collapsed: false
+                }
+            }
+        };
+
+        // Memastikan kompatibilitas data lama & kelengkapan properti setiap anggota
+        function normalizeAllNodes() {
+            Object.values(familyState.nodes).forEach(node => {
+                if (typeof node.royalTitle !== 'string') {
+                    node.royalTitle = '';
+                }
+                if (typeof node.isRoyalLeader !== 'boolean') {
+                    node.isRoyalLeader = isLeaderTitleString(node.royalTitle);
+                }
+                if (node.parentSpouseId === undefined) {
+                    node.parentSpouseId = null;
+                }
+                if (!Array.isArray(node.spouses)) {
+                    node.spouses = [];
+                    if (node.spouse && typeof node.spouse === 'string' && node.spouse.trim()) {
+                        idCounter++;
+                        const defaultSpouseGender = node.gender === 'male' ? 'female' : 'male';
+                        node.spouses.push({
+                            id: `sp-migrated-${idCounter}`,
+                            name: node.spouse.trim(),
+                            royalTitle: '',
+                            isRoyalLeader: false,
+                            gender: defaultSpouseGender,
+                            note: defaultSpouseGender === 'female' ? 'Istri' : 'Suami'
+                        });
+                    }
+                    delete node.spouse;
+                } else {
+                    node.spouses.forEach(sp => {
+                        if (typeof sp.royalTitle !== 'string') sp.royalTitle = '';
+                        if (typeof sp.isRoyalLeader !== 'boolean') {
+                            sp.isRoyalLeader = isLeaderTitleString(sp.royalTitle);
+                        }
+                    });
+                }
+                if (!Array.isArray(node.childrenIds)) {
+                    node.childrenIds = [];
+                }
+                if (typeof node.collapsed !== 'boolean') {
+                    node.collapsed = false;
+                }
+            });
+        }
+
+        // =========================================================================
+        // FUNGSI BANTU HIERARKI, IKON MAHKOTA, IKON GENDER & ANALISIS HUBUNGAN
+        // =========================================================================
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getGeneration(nodeId) {
+            let gen = 1;
+            let curr = familyState.nodes[nodeId];
+            const visited = new Set();
+            while (curr && curr.parentId && !visited.has(curr.id)) {
+                visited.add(curr.id);
+                curr = familyState.nodes[curr.parentId];
+                if (curr) gen++;
+            }
+            return gen;
+        }
+
+        function getAncestorsPath(nodeId) {
+            const path = [];
+            let curr = familyState.nodes[nodeId];
+            const visited = new Set();
+            while (curr && !visited.has(curr.id)) {
+                visited.add(curr.id);
+                path.unshift(curr);
+                curr = curr.parentId ? familyState.nodes[curr.parentId] : null;
+            }
+            return path;
+        }
+
+        function getTreeMaxDepth() {
+            let maxD = 1;
+            Object.keys(familyState.nodes).forEach(id => {
+                const g = getGeneration(id);
+                if (g > maxD) maxD = g;
+            });
+            return maxD;
+        }
+
+        function countDescendants(nodeId) {
+            const node = familyState.nodes[nodeId];
+            if (!node || !node.childrenIds || node.childrenIds.length === 0) return 0;
+            let total = 0;
+            node.childrenIds.forEach(cid => {
+                if (familyState.nodes[cid]) {
+                    total += 1 + countDescendants(cid);
+                }
+            });
+            return total;
+        }
+
+        // Ikon Mahkota Emas SVG untuk Pemimpin Kerajaan
+        function getRoyalCrownSVG(sizeClass = 'w-4 h-4') {
+            return `
+                <svg xmlns="http://www.w3.org/2000/svg" class="${sizeClass} shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-label="Pemimpin Kerajaan">
+                    <path d="M2.5 19h19v2h-19v-2zm19.07-11.46c-.45-.36-1.1-.29-1.48.14L16.5 11.7l-3.65-6.22c-.38-.65-1.32-.65-1.7 0L7.5 11.7 3.91 7.68c-.38-.43-1.03-.5-1.48-.14-.44.35-.56.98-.27 1.46L5.5 17h13l3.34-8c.29-.48.17-1.11-.27-1.46z"/>
+                    <circle cx="12" cy="3.5" r="1.3"/>
+                    <circle cx="3" cy="6.2" r="1.1"/>
+                    <circle cx="21" cy="6.2" r="1.1"/>
+                </svg>
+            `;
+        }
+
+        // Ikon Avatar SVG Laki-laki & Perempuan (+ Lencana Mahkota di Atas Avatar untuk Pemimpin Kerajaan)
+        function getGenderAvatarSVG(gender, isRoyalLeader = false) {
+            const isFemale = gender === 'female';
+            const crownBadge = isRoyalLeader ? `
+                <div class="absolute -top-2.5 -right-1.5 w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 text-white flex items-center justify-center shadow-md ring-2 ring-white z-20"
+                    title="Pemimpin Kerajaan">
+                    ${getRoyalCrownSVG('w-3.5 h-3.5')}
+                </div>
+            ` : '';
+
+            if (isFemale) {
+                return `
+                    <div class="relative w-11 h-11 rounded-2xl ${isRoyalLeader ? 'bg-gradient-to-br from-amber-100 via-rose-100 to-pink-200 text-rose-700 ring-2 ring-amber-400' : 'bg-gradient-to-br from-rose-100 to-pink-200 text-rose-700 border border-rose-200/80'} flex items-center justify-center shrink-0 shadow-xs">
+                        ${crownBadge}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="7.5" r="3.5" fill="currentColor" fill-opacity="0.18"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6.5 19.5c.8-3.4 2.9-5 5.5-5s4.7 1.6 5.5 5H6.5z"/>
+                            <path stroke-linecap="round" d="M8.5 7.5c0-2.5 1.5-4 3.5-4s3.5 1.5 3.5 4"/>
+                        </svg>
+                        <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-extrabold flex items-center justify-center shadow-xs">♀</span>
+                    </div>
+                `;
+            }
+            return `
+                <div class="relative w-11 h-11 rounded-2xl ${isRoyalLeader ? 'bg-gradient-to-br from-amber-100 via-blue-100 to-indigo-200 text-blue-700 ring-2 ring-amber-400' : 'bg-gradient-to-br from-blue-100 to-indigo-200 text-blue-700 border border-blue-200/80'} flex items-center justify-center shrink-0 shadow-xs">
+                    ${crownBadge}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="7.5" r="3.5" fill="currentColor" fill-opacity="0.18"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.5 19.5c.6-3.6 3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/>
+                    </svg>
+                    <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-extrabold flex items-center justify-center shadow-xs">♂</span>
+                </div>
+            `;
+        }
+
+        function getGenderSymbolBadge(gender) {
+            if (gender === 'female') {
+                return `<span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-100 text-rose-700 text-[10px] font-extrabold shrink-0">♀</span>`;
+            }
+            return `<span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] font-extrabold shrink-0">♂</span>`;
+        }
+
+        // Analisis Hubungan Nasab (Darah) Murni antara dua anggota
+        function analyzeBloodRelationship(idA, idB) {
+            const nodeA = familyState.nodes[idA];
+            const nodeB = familyState.nodes[idB];
+            if (!nodeA || !nodeB) return null;
+
+            const pathA = getAncestorsPath(idA);
+            const pathB = getAncestorsPath(idB);
+
+            let lcaIndex = 0;
+            while (
+                lcaIndex < pathA.length &&
+                lcaIndex < pathB.length &&
+                pathA[lcaIndex].id === pathB[lcaIndex].id
+            ) {
+                lcaIndex++;
+            }
+            lcaIndex--;
+
+            const lca = pathA[lcaIndex];
+            const dA = pathA.length - 1 - lcaIndex;
+            const dB = pathB.length - 1 - lcaIndex;
+
+            const directLabels = {
+                1: 'Orang Tua / Anak Kandung',
+                2: 'Kakek-Nenek / Cucu',
+                3: 'Buyut / Cicit',
+                4: 'Canggah / Piut',
+                5: 'Wareng',
+                6: 'Udeg-udeg',
+                7: 'Gantung Siwur'
+            };
+
+            let shortLabel = '';
+            let detailDesc = '';
+
+            if (dA === 0 && dB === 0) {
+                shortLabel = 'Orang yang Sama';
+                detailDesc = `${nodeA.name} dan ${nodeB.name} adalah individu yang sama.`;
+            } else if (dA === 0) {
+                const term = directLabels[dB] || `Leluhur & Keturunan (${dB} generasi)`;
+                shortLabel = `${term} (Selisih ${dB} Gen)`;
+                detailDesc = `${nodeA.name} adalah leluhur langsung dari ${nodeB.name} (${term}, berjarak ${dB} generasi ke bawah).`;
+            } else if (dB === 0) {
+                const term = directLabels[dA] || `Keturunan & Leluhur (${dA} generasi)`;
+                shortLabel = `${term} (Selisih ${dA} Gen)`;
+                detailDesc = `${nodeB.name} adalah leluhur langsung dari ${nodeA.name} (${term}, berjarak ${dA} generasi ke atas).`;
+            } else if (dA === 1 && dB === 1) {
+                const sameSpouse =
+                    nodeA.parentSpouseId &&
+                    nodeB.parentSpouseId &&
+                    nodeA.parentSpouseId === nodeB.parentSpouseId;
+                const parentSpouseObj =
+                    nodeA.parentSpouseId && lca && Array.isArray(lca.spouses)
+                        ? lca.spouses.find(s => s.id === nodeA.parentSpouseId)
+                        : null;
+
+                if (sameSpouse) {
+                    shortLabel = 'Saudara Kandung';
+                    detailDesc = `${nodeA.name} dan ${nodeB.name} adalah Saudara Kandung (seayah dan seibu melalui ${lca.name}${parentSpouseObj ? ` & ${parentSpouseObj.name}` : ''}).`;
+                } else if (nodeA.parentSpouseId || nodeB.parentSpouseId) {
+                    const halfLabel = lca.gender === 'male' ? 'Saudara Seayah (Lain Ibu)' : 'Saudara Seibu (Lain Ayah)';
+                    shortLabel = halfLabel;
+                    detailDesc = `${nodeA.name} dan ${nodeB.name} adalah ${halfLabel}, sama-sama keturunan dari ${lca.name}.`;
+                } else {
+                    shortLabel = 'Saudara Kandung';
+                    detailDesc = `${nodeA.name} dan ${nodeB.name} adalah saudara satu induk langsung dari ${lca.name}.`;
+                }
+            } else if (dA === 1 && dB >= 2) {
+                const keponakanTerm = dB === 2 ? 'Keponakan' : `Keponakan Cucu (${dB - 1} tingkat di bawah)`;
+                shortLabel = `Paman / Bibi & ${keponakanTerm} (Selisih ${dB - 1} Gen)`;
+                detailDesc = `${nodeA.name} adalah Paman / Bibi bagi ${nodeB.name} (${keponakanTerm}), dengan selisih ${dB - 1} generasi.`;
+            } else if (dB === 1 && dA >= 2) {
+                const keponakanTerm = dA === 2 ? 'Keponakan' : `Keponakan Cucu (${dA - 1} tingkat di bawah)`;
+                shortLabel = `${keponakanTerm} & Paman / Bibi (Selisih ${dA - 1} Gen)`;
+                detailDesc = `${nodeB.name} adalah Paman / Bibi bagi ${nodeA.name} (${keponakanTerm}), dengan selisih ${dA - 1} generasi.`;
+            } else if (dA === dB) {
+                const cousinDegree = dA - 1;
+                shortLabel = `Sepupu ke-${cousinDegree}`;
+                detailDesc = `${nodeA.name} dan ${nodeB.name} adalah Sepupu ke-${cousinDegree} (sama-sama generasi ke-${dA} di bawah ${lca.name}).`;
+            } else {
+                const minDegree = Math.min(dA, dB) - 1;
+                const removed = Math.abs(dA - dB);
+                const elder = dA < dB ? nodeA.name : nodeB.name;
+                const younger = dA < dB ? nodeB.name : nodeA.name;
+                shortLabel = `Sepupu ke-${minDegree} Selisih ${removed} Generasi`;
+                detailDesc = `${nodeA.name} dan ${nodeB.name} memiliki hubungan Sepupu ke-${minDegree} berbeda ${removed} generasi (${elder} berada ${removed} tingkat generasi lebih atas daripada ${younger}).`;
+            }
+
+            return { lca, dA, dB, shortLabel, detailDesc };
+        }
+
+        // Analisis Lengkap (Hubungan Nasab + Hubungan Semenda / Pernikahan Antar Generasi)
+        function analyzeRelationship(idA, idB) {
+            const nodeA = familyState.nodes[idA];
+            const nodeB = familyState.nodes[idB];
+            if (!nodeA || !nodeB) return null;
+
+            const blood = analyzeBloodRelationship(idA, idB);
+            const genA = getGeneration(idA);
+            const genB = getGeneration(idB);
+            const genDiff = Math.abs(genA - genB);
+
+            const isDirectSpouse =
+                (nodeA.spouses || []).some(s => s.linkedMemberId === idB) ||
+                (nodeB.spouses || []).some(s => s.linkedMemberId === idA);
+
+            if (isDirectSpouse) {
+                const interGenNote = genDiff > 0
+                    ? `Karena terjadi pernikahan antar generasi (Gen ${genA} menikah dengan Gen ${genB}, selisih ${genDiff} generasi), pasangan ini memiliki hubungan asal "${blood.shortLabel}", dan keturunan mereka akan mewarisi garis nasab ganda (Gen ${genA + 1} dari jalur ${nodeA.name} sekaligus Gen ${genB + 1} dari jalur ${nodeB.name}).`
+                    : `Keduanya berada pada generasi yang sama (Gen ${genA}) dengan hubungan asal "${blood.shortLabel}".`;
+
+                return {
+                    title: genDiff > 0
+                        ? `Suami / Istri (Pernikahan Antar Generasi • Selisih ${genDiff} Gen)`
+                        : `Suami / Istri (Pernikahan Sesama Rumpun Keluarga)`,
+                    description: `${nodeA.name} (Gen ${genA}) dan ${nodeB.name} (Gen ${genB}) terikat pernikahan langsung. Sebelum menikah, hubungan kekerabatan asal keduanya adalah ${blood.shortLabel}.`,
+                    extraNote: interGenNote,
+                    lca: blood.lca
+                };
+            }
+
+            let marriageAffinity = null;
+            if (nodeA.parentId) {
+                const parentA = familyState.nodes[nodeA.parentId];
+                if (parentA && (parentA.spouses || []).some(s => s.linkedMemberId === idB)) {
+                    marriageAffinity = `Hubungan Semenda: ${nodeB.name} adalah Orang Tua Tiri / Pasangan dari ${parentA.name} (orang tua ${nodeA.name}).`;
+                }
+            }
+            if (!marriageAffinity && nodeB.parentId) {
+                const parentB = familyState.nodes[nodeB.parentId];
+                if (parentB && (parentB.spouses || []).some(s => s.linkedMemberId === idA)) {
+                    marriageAffinity = `Hubungan Semenda: ${nodeA.name} adalah Orang Tua Tiri / Pasangan dari ${parentB.name} (orang tua ${nodeB.name}).`;
+                }
+            }
+
+            if (!marriageAffinity) {
+                const spouseOfA = (nodeA.spouses || []).find(s => s.linkedMemberId && familyState.nodes[s.linkedMemberId]);
+                if (spouseOfA) {
+                    const partnerA = familyState.nodes[spouseOfA.linkedMemberId];
+                    const partnerRelToB = analyzeBloodRelationship(partnerA.id, idB);
+                    if (partnerRelToB && partnerRelToB.dA === 0 && partnerRelToB.dB === 1) {
+                        marriageAffinity = `Hubungan Semenda: ${nodeA.name} adalah Mertua dari ${nodeB.name} (karena anak ${nodeA.name}, yaitu ${partnerA.name}, menikah dengan ${nodeB.name}).`;
+                    } else if (partnerRelToB && partnerRelToB.dB === 0 && partnerRelToB.dA === 1) {
+                        marriageAffinity = `Hubungan Semenda: ${nodeA.name} adalah Menantu dari ${nodeB.name} (melalui pernikahan dengan ${partnerA.name}).`;
+                    } else if (partnerRelToB && partnerRelToB.dA === 1 && partnerRelToB.dB === 1) {
+                        marriageAffinity = `Hubungan Semenda: ${nodeA.name} adalah Saudara Ipar dari ${nodeB.name} (karena menikah dengan ${partnerA.name}).`;
+                    } else if (partnerRelToB && partnerRelToB.dA === 2 && partnerRelToB.dB === 1) {
+                        marriageAffinity = `Hubungan Semenda: ${nodeA.name} adalah Keponakan Menantu dari ${nodeB.name} (melalui pernikahan dengan ${partnerA.name}).`;
+                    } else if (partnerRelToB && partnerRelToB.dA === 1 && partnerRelToB.dB === 2) {
+                        marriageAffinity = `Hubungan Semenda: ${nodeA.name} adalah Paman / Bibi Semenda dari ${nodeB.name} (melalui pernikahan dengan ${partnerA.name}).`;
+                    }
+                }
+            }
+
+            if (!marriageAffinity) {
+                const spouseOfB = (nodeB.spouses || []).find(s => s.linkedMemberId && familyState.nodes[s.linkedMemberId]);
+                if (spouseOfB) {
+                    const partnerB = familyState.nodes[spouseOfB.linkedMemberId];
+                    const partnerRelToA = analyzeBloodRelationship(partnerB.id, idA);
+                    if (partnerRelToA && partnerRelToA.dA === 0 && partnerRelToA.dB === 1) {
+                        marriageAffinity = `Hubungan Semenda: ${nodeB.name} adalah Mertua dari ${nodeA.name} (melalui ${partnerB.name}).`;
+                    } else if (partnerRelToA && partnerRelToA.dB === 0 && partnerRelToA.dA === 1) {
+                        marriageAffinity = `Hubungan Semenda: ${nodeB.name} adalah Menantu dari ${nodeA.name} (melalui ${partnerB.name}).`;
+                    } else if (partnerRelToA && partnerRelToA.dA === 1 && partnerRelToA.dB === 1) {
+                        marriageAffinity = `Hubungan Semenda: ${nodeB.name} adalah Saudara Ipar dari ${nodeA.name} (melalui ${partnerB.name}).`;
+                    }
+                }
+            }
+
+            if (!marriageAffinity) {
+                for (const cidA of (nodeA.childrenIds || [])) {
+                    const childA = familyState.nodes[cidA];
+                    if (!childA) continue;
+                    for (const sp of (childA.spouses || [])) {
+                        if (sp.linkedMemberId && (nodeB.childrenIds || []).includes(sp.linkedMemberId)) {
+                            const childB = familyState.nodes[sp.linkedMemberId];
+                            marriageAffinity = `Hubungan Semenda: ${nodeA.name} (Gen ${genA}) dan ${nodeB.name} (Gen ${genB}) adalah Besan (anak mereka, ${childA.name} dan ${childB.name}, saling menikah).`;
+                            break;
+                        }
+                    }
+                    if (marriageAffinity) break;
+                }
+            }
+
+            return {
+                title: blood.shortLabel,
+                description: blood.detailDesc,
+                extraNote: marriageAffinity,
+                lca: blood.lca
+            };
+        }
+
+        // =========================================================================
+        // RENDER POHON SILSILAH (ATAS KE BAWAH)
+        // =========================================================================
+        function buildTreeHTML(nodeId, generation = 1) {
+            const node = familyState.nodes[nodeId];
+            if (!node) return '';
+
+            const isMale = node.gender !== 'female';
+            const isRoyalLeader = Boolean(node.isRoyalLeader);
+            const isHighlighted = highlightedNodeIds.has(node.id);
+            const hasChildren = node.childrenIds && node.childrenIds.length > 0;
+            const canAddMore = generation < MAX_GENERATIONS;
+            const isRootNode = node.id === familyState.rootId;
+            const canAddAbove = isRootNode && getTreeMaxDepth() < MAX_GENERATIONS;
+            const canDeleteRoot = isRootNode && (node.childrenIds || []).length === 1;
+
+            const cardBorder = isRoyalLeader
+                ? 'border-amber-400 border-t-amber-500 ring-2 ring-amber-300/60 royal-leader-card'
+                : (isMale ? 'border-blue-300 border-t-blue-500' : 'border-rose-300 border-t-rose-500');
+
+            const badgeColor = isMale
+                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                : 'bg-rose-50 text-rose-700 border-rose-200';
+
+            const lifeSpan = [node.birthYear, node.deathYear ? `Wafat ${node.deathYear}` : '']
+                .filter(Boolean)
+                .join(' • ');
+
+            // Lencana Pemimpin Kerajaan dengan Ikon Mahkota
+            const royalLeaderPillHTML = isRoyalLeader ? `
+                <div class="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-white shadow-xs">
+                    ${getRoyalCrownSVG('w-3.5 h-3.5 text-white')}
+                    <span>Pemimpin Kerajaan</span>
+                </div>
+            ` : '';
+
+            // Badge Gelar Kerajaan (Jika Diisi)
+            const royalTitleBadgeHTML = node.royalTitle ? `
+                <div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${isRoyalLeader ? 'bg-amber-100 text-amber-950 border border-amber-400' : 'bg-gradient-to-r from-amber-50 to-yellow-50 text-amber-900 border border-amber-300/90'} max-w-full shadow-2xs">
+                    ${isRoyalLeader ? getRoyalCrownSVG('w-3 h-3 text-amber-600') : '<span class="shrink-0">👑</span>'}
+                    <span class="truncate">${escapeHTML(node.royalTitle)}</span>
+                </div>
+            ` : '';
+
+            // Informasi Pasangan Orang Tua (Ibu / Ayah) pada Kartu Keturunan
+            let otherParentBadgeHTML = '';
+            if (node.parentId && familyState.nodes[node.parentId]) {
+                const parentNode = familyState.nodes[node.parentId];
+                const parentSpouse = (parentNode.spouses || []).find(s => s.id === node.parentSpouseId);
+                if (parentSpouse) {
+                    const roleText = parentSpouse.gender === 'female' ? 'Ibu' : 'Ayah';
+                    otherParentBadgeHTML = `
+                        <div class="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200/80 max-w-full">
+                            <span class="text-slate-400 shrink-0">${roleText}:</span>
+                            <span class="truncate text-slate-700">${escapeHTML(parentSpouse.name)}</span>
+                        </div>
+                    `;
+                }
+            }
+
+            // Daftar Pasangan Suami / Istri (Mendukung Lebih dari 1 Pasangan & Tombol + Anak per Pasangan)
+            const spouses = Array.isArray(node.spouses) ? node.spouses : [];
+            const spousesHTML = spouses.length > 0 ? `
+                <div class="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5">
+                    ${spouses.map(sp => {
+                        const spIsFemale = sp.gender === 'female';
+                        const spIsLeader = Boolean(sp.isRoyalLeader);
+                        const linkedNode = sp.linkedMemberId ? familyState.nodes[sp.linkedMemberId] : null;
+                        const linkedGen = linkedNode ? getGeneration(linkedNode.id) : null;
+                        const isInterGen = linkedGen !== null && linkedGen !== generation;
+                        const childrenWithSpouseCount = (node.childrenIds || []).filter(cid =>
+                            familyState.nodes[cid] && familyState.nodes[cid].parentSpouseId === sp.id
+                        ).length;
+
+                        const boxStyle = spIsLeader
+                            ? 'bg-amber-50/90 border-amber-300'
+                            : (spIsFemale ? 'bg-rose-50/75 border-rose-200/80' : 'bg-blue-50/75 border-blue-200/80');
+
+                        return `
+                        <div class="px-2.5 py-1.5 rounded-xl border ${boxStyle} text-xs group/sp space-y-1">
+                            <div class="flex items-center justify-between gap-1.5">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    ${spIsLeader
+                                        ? `<span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white shrink-0" title="Pemimpin Kerajaan">${getRoyalCrownSVG('w-2.5 h-2.5')}</span>`
+                                        : getGenderSymbolBadge(sp.gender)}
+                                    <div class="truncate">
+                                        <span class="font-semibold text-slate-800">${escapeHTML(sp.name)}</span>
+                                        ${sp.royalTitle ? `<span class="inline-flex items-center gap-0.5 ml-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-950 border border-amber-300/90">${spIsLeader ? '👑' : '👑'} ${escapeHTML(sp.royalTitle)}</span>` : ''}
+                                        ${sp.note ? `<span class="text-[10px] text-slate-500 ml-1">(${escapeHTML(sp.note)})</span>` : ''}
+                                        ${linkedNode ? `
+                                            <span class="inline-flex items-center ml-1 px-1.5 py-0.2 rounded text-[9px] font-bold ${isInterGen ? 'bg-violet-100 text-violet-700 border border-violet-300' : 'bg-amber-100 text-amber-800'}">
+                                                ${isInterGen ? `Antar Gen: Gen ${linkedGen}` : `Gen ${linkedGen}`}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                <div class="no-print flex items-center gap-1 shrink-0">
+                                    ${canAddMore ? `
+                                    <button type="button" onclick="openAddModal('${node.id}', '${sp.id}')"
+                                        title="Tambah keturunan bersama ${escapeHTML(sp.name)}"
+                                        class="px-1.5 py-0.5 bg-white/90 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 text-[10px] font-bold rounded-lg shadow-2xs transition">
+                                        + Anak
+                                    </button>
+                                    ` : ''}
+                                    <button type="button" onclick="removeSpouseFromCard('${node.id}', '${sp.id}')" title="Hapus Pasangan"
+                                        class="opacity-60 group-hover/sp:opacity-100 text-slate-400 hover:text-rose-600 text-xs font-bold px-1 transition">
+                                        &times;
+                                    </button>
+                                </div>
+                            </div>
+                            ${childrenWithSpouseCount > 0 ? `
+                            <div class="text-[10px] text-slate-500 pl-5">
+                                Keturunan bersama: <strong class="text-slate-700">${childrenWithSpouseCount} anak</strong>
+                            </div>
+                            ` : ''}
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            ` : '';
+
+            // Kelompokkan anak-anak berdasarkan masing-masing pasangan agar rapi di bagan
+            let childrenHTML = '';
+            if (hasChildren && !node.collapsed) {
+                const validChildren = node.childrenIds
+                    .map(cid => familyState.nodes[cid])
+                    .filter(Boolean);
+
+                const orderedChildren = [];
+                const placedIds = new Set();
+
+                spouses.forEach(sp => {
+                    validChildren.forEach(child => {
+                        if (child.parentSpouseId === sp.id && !placedIds.has(child.id)) {
+                            orderedChildren.push(child);
+                            placedIds.add(child.id);
+                        }
+                    });
+                });
+
+                validChildren.forEach(child => {
+                    if (!placedIds.has(child.id)) {
+                        orderedChildren.push(child);
+                        placedIds.add(child.id);
+                    }
+                });
+
+                childrenHTML = `
+                    <ul>
+                        ${orderedChildren.map(child => buildTreeHTML(child.id, generation + 1)).join('')}
+                    </ul>
+                `;
+            }
+
+            // Tombol Tambah Generasi di Atasnya (Khusus pada Anggota Teratas / Root)
+            const topAncestorButtonHTML = isRootNode ? `
+                <div class="no-print flex flex-col items-center mb-0.5">
+                    ${canAddAbove ? `
+                    <div class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                        ↑ Tambah Generasi di Atasnya
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="openAddParentModal('male')"
+                            class="add-above-btn px-3 py-1.5 bg-white hover:bg-blue-600 text-blue-700 hover:text-white text-xs font-bold rounded-full border-2 border-blue-300 hover:border-blue-600 shadow-sm flex items-center gap-1.5 transition"
+                            title="Tambahkan Bapak satu generasi di atas ${escapeHTML(node.name)}">
+                            <span class="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-extrabold">♂</span>
+                            <span>+ Tambah Bapak</span>
+                        </button>
+                        <button type="button" onclick="openAddParentModal('female')"
+                            class="add-above-btn px-3 py-1.5 bg-white hover:bg-rose-600 text-rose-700 hover:text-white text-xs font-bold rounded-full border-2 border-rose-300 hover:border-rose-600 shadow-sm flex items-center gap-1.5 transition"
+                            title="Tambahkan Ibu satu generasi di atas ${escapeHTML(node.name)}">
+                            <span class="w-4 h-4 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center text-[10px] font-extrabold">♀</span>
+                            <span>+ Tambah Ibu</span>
+                        </button>
+                    </div>
+                    <div class="add-above-connector"></div>
+                    ` : `
+                    <div class="px-3 py-1 bg-amber-50 text-amber-700 text-[11px] font-semibold rounded-full border border-amber-200 mb-2">
+                        Kedalaman Maksimal 100 Generasi Tercapai
+                    </div>
+                    `}
+                </div>
+            ` : '';
+
+            return `
+                <li>
+                    ${topAncestorButtonHTML}
+                    <div id="card-${node.id}" data-node-id="${node.id}"
+                        class="member-card ${isHighlighted ? 'highlighted-node' : ''} w-64 sm:w-72 bg-white/95 rounded-2xl border ${cardBorder} border-t-4 shadow-lg shadow-slate-200/70 hover:shadow-xl p-4 text-left">
+                        
+                        <!-- Baris Atas: Badge Generasi & Tombol Cepat -->
+                        <div class="flex items-center justify-between gap-1 mb-2">
+                            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${badgeColor}">
+                                <span>Generasi ${generation}</span>
+                                <span>•</span>
+                                <span>${isMale ? 'Laki-laki' : 'Perempuan'}</span>
+                            </span>
+                            <div class="no-print flex items-center gap-0.5">
+                                <button type="button" onclick="openLineageForMember('${node.id}')" title="Cek Silsilah Anggota Ini"
+                                    class="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
+                                </button>
+                                <button type="button" onclick="openEditModal('${node.id}')" title="Edit Data Anggota"
+                                    class="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                </button>
+                                ${(!isRootNode || canDeleteRoot) ? `
+                                <button type="button" onclick="confirmDeleteMember('${node.id}')" title="${isRootNode ? 'Hapus Generasi Teratas Ini' : 'Hapus Anggota'}"
+                                    class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Lencana Pemimpin Kerajaan (Ikon Mahkota) -->
+                        ${royalLeaderPillHTML}
+
+                        <!-- Profil Utama dengan Ikon Avatar Laki-laki / Perempuan (+ Mahkota jika Pemimpin Kerajaan) -->
+                        <div class="flex items-start gap-3">
+                            ${getGenderAvatarSVG(node.gender, isRoyalLeader)}
+                            <div class="min-w-0 flex-1">
+                                <div class="font-bold text-slate-900 text-sm sm:text-base leading-snug break-words">
+                                    ${escapeHTML(node.name)}
+                                </div>
+                                ${royalTitleBadgeHTML}
+                                ${otherParentBadgeHTML}
+                                ${lifeSpan ? `<div class="text-[11px] font-medium text-slate-500 mt-0.5">${lifeSpan}</div>` : ''}
+                                ${node.notes ? `<div class="text-[11px] text-slate-500 mt-0.5 line-clamp-2">${escapeHTML(node.notes)}</div>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Daftar Pasangan Suami / Istri -->
+                        ${spousesHTML}
+
+                        <!-- Baris Aksi Bawah: Tambah Pasangan, Tambah Keturunan & Lipat Cabang -->
+                        <div class="no-print mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-1.5">
+                            <button type="button" onclick="openAddSpouseModal('${node.id}')" title="Tambah Pasangan Suami / Istri Baru"
+                                class="py-1.5 px-2.5 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white text-[11px] font-semibold rounded-xl transition shrink-0">
+                                + Pasangan
+                            </button>
+
+                            ${canAddMore ? `
+                            <button type="button" onclick="openAddModal('${node.id}')"
+                                class="flex-1 py-1.5 px-2 bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white text-[11px] font-semibold rounded-xl transition truncate">
+                                + Keturunan (Gen ${generation + 1})
+                            </button>` : `
+                            <span class="flex-1 py-1 px-2 bg-amber-50 text-amber-700 text-[10px] font-semibold rounded-lg text-center">
+                                Maks. 100 Gen
+                            </span>`}
+
+                            ${hasChildren ? `
+                            <button type="button" onclick="toggleCollapse('${node.id}')" title="${node.collapsed ? 'Tampilkan Keturunan' : 'Sembunyikan Keturunan'}"
+                                class="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition shrink-0">
+                                ${node.collapsed ? `+${node.childrenIds.length}` : '−'}
+                            </button>` : ''}
+                        </div>
+                    </div>
+                    ${childrenHTML}
+                </li>
+            `;
+        }
+
+        function renderApp() {
+            const treeRootEl = document.getElementById('family-tree-root');
+            if (!treeRootEl) return;
+
+            if (highlightedNodeIds.size > 0) {
+                treeRootEl.classList.add('has-highlight');
+            } else {
+                treeRootEl.classList.remove('has-highlight');
+            }
+
+            treeRootEl.innerHTML = `<ul>${buildTreeHTML(familyState.rootId, 1)}</ul>`;
+
+            const allNodes = Object.values(familyState.nodes);
+            document.getElementById('stat-total').textContent = allNodes.length;
+            document.getElementById('stat-depth').textContent = getTreeMaxDepth();
+
+            const leaderCount = allNodes.filter(n => n.isRoyalLeader).length;
+            const leadersWrap = document.getElementById('stat-leaders-wrap');
+            if (leaderCount > 0) {
+                document.getElementById('stat-leaders').textContent = leaderCount;
+                leadersWrap.classList.remove('hidden');
+            } else {
+                leadersWrap.classList.add('hidden');
+            }
+        }
+
+        function focusOnMember(nodeId) {
+            const ancestors = getAncestorsPath(nodeId);
+            let changed = false;
+            for (let i = 0; i < ancestors.length - 1; i++) {
+                if (ancestors[i].collapsed) {
+                    ancestors[i].collapsed = false;
+                    changed = true;
+                }
+            }
+            if (changed) renderApp();
+
+            setTimeout(() => {
+                const cardEl = document.getElementById(`card-${nodeId}`);
+                if (cardEl) {
+                    cardEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                    cardEl.classList.add('ring-4', 'ring-indigo-400');
+                    setTimeout(() => cardEl.classList.remove('ring-4', 'ring-indigo-400'), 1800);
+                }
+            }, 60);
+        }
+
+        // =========================================================================
+        // MODAL TAMBAH, EDIT & HAPUS ANGGOTA + PASANGAN SUAMI/ISTRI
+        // =========================================================================
+        const memberModal = document.getElementById('member-modal');
+        const memberForm = document.getElementById('member-form');
+        const spouseModal = document.getElementById('spouse-modal');
+        const spouseForm = document.getElementById('spouse-form');
+
+        // Deteksi otomatis saat mengetik gelar kerajaan (tetap bisa dicentang/dihapus manual)
+        const royalTitleInput = document.getElementById('input-royal-title');
+        const royalLeaderCheckbox = document.getElementById('input-is-royal-leader');
+
+        royalTitleInput.addEventListener('input', () => {
+            if (!royalLeaderCheckbox.dataset.manualToggled) {
+                royalLeaderCheckbox.checked = isLeaderTitleString(royalTitleInput.value);
+            }
+        });
+        royalLeaderCheckbox.addEventListener('change', () => {
+            royalLeaderCheckbox.dataset.manualToggled = 'true';
+        });
+
+        const newSpouseTitleInput = document.getElementById('new-spouse-royal-title');
+        const newSpouseLeaderCheckbox = document.getElementById('new-spouse-is-royal-leader');
+
+        newSpouseTitleInput.addEventListener('input', () => {
+            if (!newSpouseLeaderCheckbox.dataset.manualToggled) {
+                newSpouseLeaderCheckbox.checked = isLeaderTitleString(newSpouseTitleInput.value);
+            }
+        });
+        newSpouseLeaderCheckbox.addEventListener('change', () => {
+            newSpouseLeaderCheckbox.dataset.manualToggled = 'true';
+        });
+
+        function setupParentSpouseSelector(parentNode, selectedSpouseId = '', isNewChild = true) {
+            const box = document.getElementById('parent-spouse-selector-box');
+            const selectEl = document.getElementById('input-parent-spouse');
+            const hintEl = document.getElementById('parent-spouse-hint');
+            if (!box || !selectEl || !parentNode) return;
+
+            const spouses = Array.isArray(parentNode.spouses) ? parentNode.spouses : [];
+            if (spouses.length === 0) {
+                box.classList.add('hidden');
+                selectEl.innerHTML = '<option value="">Tanpa Pasangan Tertentu</option>';
+                return;
+            }
+
+            box.classList.remove('hidden');
+            const options = spouses.map((sp, idx) => {
+                const role = sp.gender === 'female' ? 'Ibu' : 'Ayah';
+                return `<option value="${sp.id}">${role} ke-${idx + 1}: ${escapeHTML(sp.name)}${sp.note ? ` (${escapeHTML(sp.note)})` : ''}</option>`;
+            });
+            options.push(`<option value="">Tidak ditentukan / Umum (${escapeHTML(parentNode.name)})</option>`);
+            selectEl.innerHTML = options.join('');
+
+            if (selectedSpouseId && spouses.some(s => s.id === selectedSpouseId)) {
+                selectEl.value = selectedSpouseId;
+            } else if (isNewChild && spouses.length > 0) {
+                selectEl.value = spouses[0].id;
+            } else {
+                selectEl.value = '';
+            }
+
+            hintEl.textContent = spouses.length > 1
+                ? `${parentNode.name} memiliki ${spouses.length} pasangan. Pilih pasangan yang menjadi ibu/ayah kandung dari keturunan ini.`
+                : `Keturunan dari ${parentNode.name} & ${spouses[0].name}.`;
+        }
+
+        function renderEditSpousesList(nodeId) {
+            const node = familyState.nodes[nodeId];
+            const listEl = document.getElementById('edit-spouses-list');
+            if (!node || !listEl) return;
+
+            if (!node.spouses || node.spouses.length === 0) {
+                listEl.innerHTML = `<p class="text-xs text-slate-400 italic">Belum ada pasangan tercatat.</p>`;
+                return;
+            }
+
+            listEl.innerHTML = node.spouses.map(sp => `
+                <div class="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs">
+                    <div class="flex items-center gap-2 min-w-0">
+                        ${sp.isRoyalLeader
+                            ? `<span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white shrink-0">${getRoyalCrownSVG('w-2.5 h-2.5')}</span>`
+                            : getGenderSymbolBadge(sp.gender)}
+                        <div class="truncate">
+                            <span class="font-semibold text-slate-800">${escapeHTML(sp.name)}</span>
+                            ${sp.royalTitle ? `<span class="ml-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300">👑 ${escapeHTML(sp.royalTitle)}</span>` : ''}
+                            ${sp.note ? `<span class="text-slate-500 ml-1">(${escapeHTML(sp.note)})</span>` : ''}
+                        </div>
+                    </div>
+                    <button type="button" onclick="removeSpouseInModal('${node.id}', '${sp.id}')"
+                        class="text-rose-500 hover:text-rose-700 font-semibold px-1.5 py-0.5 rounded hover:bg-rose-50 shrink-0">
+                        Hapus
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        window.removeSpouseInModal = function(nodeId, spouseId) {
+            const node = familyState.nodes[nodeId];
+            if (!node) return;
+            const targetSpouse = node.spouses.find(s => s.id === spouseId);
+            if (targetSpouse && targetSpouse.linkedMemberId && familyState.nodes[targetSpouse.linkedMemberId]) {
+                const partnerNode = familyState.nodes[targetSpouse.linkedMemberId];
+                partnerNode.spouses = (partnerNode.spouses || []).filter(s => s.linkedMemberId !== nodeId);
+            }
+            (node.childrenIds || []).forEach(cid => {
+                if (familyState.nodes[cid] && familyState.nodes[cid].parentSpouseId === spouseId) {
+                    familyState.nodes[cid].parentSpouseId = null;
+                }
+            });
+            node.spouses = node.spouses.filter(s => s.id !== spouseId);
+            renderEditSpousesList(nodeId);
+            if (node.parentId) {
+                setupParentSpouseSelector(familyState.nodes[node.parentId], node.parentSpouseId || '', false);
+            }
+            renderApp();
+        };
+
+        window.removeSpouseFromCard = function(nodeId, spouseId) {
+            const node = familyState.nodes[nodeId];
+            if (!node) return;
+            const targetSpouse = node.spouses.find(s => s.id === spouseId);
+            if (!targetSpouse) return;
+
+            openConfirmDialog(
+                'Hapus Pasangan?',
+                `Hapus "${targetSpouse.name}" dari daftar pasangan ${node.name}?`,
+                () => {
+                    if (targetSpouse.linkedMemberId && familyState.nodes[targetSpouse.linkedMemberId]) {
+                        const partnerNode = familyState.nodes[targetSpouse.linkedMemberId];
+                        partnerNode.spouses = (partnerNode.spouses || []).filter(s => s.linkedMemberId !== nodeId);
+                    }
+                    (node.childrenIds || []).forEach(cid => {
+                        if (familyState.nodes[cid] && familyState.nodes[cid].parentSpouseId === spouseId) {
+                            familyState.nodes[cid].parentSpouseId = null;
+                        }
+                    });
+                    node.spouses = node.spouses.filter(s => s.id !== spouseId);
+                    renderApp();
+                    showToast(`Pasangan "${targetSpouse.name}" dihapus.`);
+                }
+            );
+        };
+
+        // Pengaturan Mode Sumber Pasangan (Luar Silsilah vs Anggota Silsilah Antar Generasi)
+        function setSpouseSourceMode(mode) {
+            document.getElementById('spouse-source-mode').value = mode;
+            const extBtn = document.getElementById('spouse-source-external-btn');
+            const intBtn = document.getElementById('spouse-source-internal-btn');
+            const extFields = document.getElementById('external-spouse-fields');
+            const intFields = document.getElementById('internal-spouse-fields');
+
+            if (mode === 'internal') {
+                intBtn.className = 'py-2 px-2.5 text-xs font-bold rounded-lg bg-white text-rose-700 shadow-xs transition';
+                extBtn.className = 'py-2 px-2.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition';
+                extFields.classList.add('hidden');
+                intFields.classList.remove('hidden');
+                updateInternalSpousePreview();
+            } else {
+                extBtn.className = 'py-2 px-2.5 text-xs font-bold rounded-lg bg-white text-slate-800 shadow-xs transition';
+                intBtn.className = 'py-2 px-2.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition';
+                intFields.classList.add('hidden');
+                extFields.classList.remove('hidden');
+            }
+        }
+
+        function updateInternalSpousePreview() {
+            const memberId = document.getElementById('spouse-member-id').value;
+            const targetId = document.getElementById('internal-spouse-select').value;
+            const previewEl = document.getElementById('internal-spouse-kinship-preview');
+            const member = familyState.nodes[memberId];
+            const target = familyState.nodes[targetId];
+
+            if (!member || !target || !previewEl) return;
+
+            const genA = getGeneration(memberId);
+            const genB = getGeneration(targetId);
+            const diff = Math.abs(genA - genB);
+            const bloodRel = analyzeBloodRelationship(memberId, targetId);
+
+            previewEl.innerHTML = `
+                <div class="font-bold text-amber-900">
+                    ${diff > 0
+                        ? `⚠️ Pernikahan Antar Generasi: Gen ${genA} × Gen ${genB} (Selisih ${diff} Generasi)`
+                        : `Pernikahan Sesama Generasi: Gen ${genA} × Gen ${genB}`}
+                </div>
+                <div>• Hubungan Kekerabatan Asal: <strong>${escapeHTML(bloodRel.shortLabel)}</strong></div>
+                <div>• Leluhur Penghubung: <strong>${escapeHTML(bloodRel.lca.name)}</strong> (Gen ${getGeneration(bloodRel.lca.id)})</div>
+            `;
+
+            const noteInput = document.getElementById('new-spouse-note');
+            if (!noteInput.dataset.userEdited) {
+                const role = target.gender === 'female' ? 'Istri' : 'Suami';
+                noteInput.value = diff > 0 ? `${role} • Antar Gen (${genA}×${genB})` : `${role} • Sesama Keluarga`;
+            }
+        }
+
+        document.getElementById('spouse-source-external-btn').addEventListener('click', () => setSpouseSourceMode('external'));
+        document.getElementById('spouse-source-internal-btn').addEventListener('click', () => setSpouseSourceMode('internal'));
+        document.getElementById('internal-spouse-select').addEventListener('change', updateInternalSpousePreview);
+        document.getElementById('new-spouse-note').addEventListener('input', (e) => {
+            e.target.dataset.userEdited = 'true';
+        });
+
+        window.openAddSpouseModal = function(memberId) {
+            const member = familyState.nodes[memberId];
+            if (!member) return;
+
+            document.getElementById('spouse-member-id').value = memberId;
+            document.getElementById('spouse-modal-subtitle').textContent =
+                `Pasangan baru untuk ${member.name} (Generasi ke-${getGeneration(memberId)})`;
+            document.getElementById('new-spouse-name').value = '';
+            document.getElementById('new-spouse-royal-title').value = '';
+            delete newSpouseLeaderCheckbox.dataset.manualToggled;
+            newSpouseLeaderCheckbox.checked = false;
+
+            const noteInput = document.getElementById('new-spouse-note');
+            delete noteInput.dataset.userEdited;
+
+            const defaultFemale = member.gender === 'male';
+            document.getElementById('spouse-radio-female').checked = defaultFemale;
+            document.getElementById('spouse-radio-male').checked = !defaultFemale;
+            const nextNum = (member.spouses ? member.spouses.length : 0) + 1;
+            noteInput.value = defaultFemale ? `Istri ke-${nextNum}` : `Suami ke-${nextNum}`;
+
+            const internalSelect = document.getElementById('internal-spouse-select');
+            const alreadyLinkedIds = new Set((member.spouses || []).map(s => s.linkedMemberId).filter(Boolean));
+            const candidates = Object.values(familyState.nodes)
+                .filter(n => n.id !== memberId && !alreadyLinkedIds.has(n.id))
+                .sort((a, b) => getGeneration(a.id) - getGeneration(b.id));
+
+            const intTabBtn = document.getElementById('spouse-source-internal-btn');
+            if (candidates.length === 0) {
+                intTabBtn.disabled = true;
+                intTabBtn.classList.add('opacity-40', 'cursor-not-allowed');
+            } else {
+                intTabBtn.disabled = false;
+                intTabBtn.classList.remove('opacity-40', 'cursor-not-allowed');
+                internalSelect.innerHTML = candidates.map(c => {
+                    const g = getGeneration(c.id);
+                    const sym = c.gender === 'female' ? '♀' : '♂';
+                    return `<option value="${c.id}">[Gen ${g}] ${sym} ${escapeHTML(c.name)}</option>`;
+                }).join('');
+            }
+
+            setSpouseSourceMode('external');
+            spouseModal.classList.remove('hidden');
+            spouseModal.classList.add('flex');
+            setTimeout(() => document.getElementById('new-spouse-name').focus(), 50);
+        };
+
+        function closeSpouseModal() {
+            spouseModal.classList.add('hidden');
+            spouseModal.classList.remove('flex');
+        }
+
+        document.getElementById('close-spouse-modal-btn').addEventListener('click', closeSpouseModal);
+        document.getElementById('cancel-spouse-btn').addEventListener('click', closeSpouseModal);
+
+        spouseForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const memberId = document.getElementById('spouse-member-id').value;
+            const member = familyState.nodes[memberId];
+            if (!member) return;
+
+            const sourceMode = document.getElementById('spouse-source-mode').value;
+            const note = document.getElementById('new-spouse-note').value.trim();
+
+            if (sourceMode === 'internal') {
+                const targetId = document.getElementById('internal-spouse-select').value;
+                const targetMember = familyState.nodes[targetId];
+                if (!targetMember) {
+                    showToast('Pilih anggota keluarga terlebih dahulu.', 'error');
+                    return;
+                }
+
+                if (!Array.isArray(member.spouses)) member.spouses = [];
+                if (!Array.isArray(targetMember.spouses)) targetMember.spouses = [];
+
+                if (member.spouses.some(s => s.linkedMemberId === targetId)) {
+                    showToast('Kedua anggota ini sudah terhubung sebagai pasangan.', 'error');
+                    return;
+                }
+
+                idCounter++;
+                member.spouses.push({
+                    id: `sp-${Date.now()}-${idCounter}`,
+                    name: targetMember.name,
+                    royalTitle: targetMember.royalTitle || '',
+                    isRoyalLeader: Boolean(targetMember.isRoyalLeader),
+                    gender: targetMember.gender,
+                    note: note || (targetMember.gender === 'female' ? 'Istri' : 'Suami'),
+                    linkedMemberId: targetMember.id
+                });
+
+                if (!targetMember.spouses.some(s => s.linkedMemberId === memberId)) {
+                    idCounter++;
+                    targetMember.spouses.push({
+                        id: `sp-${Date.now()}-${idCounter}`,
+                        name: member.name,
+                        royalTitle: member.royalTitle || '',
+                        isRoyalLeader: Boolean(member.isRoyalLeader),
+                        gender: member.gender,
+                        note: note || (member.gender === 'female' ? 'Istri' : 'Suami'),
+                        linkedMemberId: member.id
+                    });
+                }
+
+                const genDiff = Math.abs(getGeneration(memberId) - getGeneration(targetId));
+                closeSpouseModal();
+                renderApp();
+                showToast(
+                    genDiff > 0
+                        ? `Pernikahan antar generasi (${member.name} & ${targetMember.name}) berhasil dicatat!`
+                        : `Pernikahan antara ${member.name} & ${targetMember.name} berhasil dicatat!`
+                );
+                return;
+            }
+
+            // Mode Pasangan dari Luar Silsilah
+            const spouseName = document.getElementById('new-spouse-name').value.trim();
+            if (!spouseName) {
+                showToast('Nama pasangan wajib diisi.', 'error');
+                return;
+            }
+            const spouseRoyalTitle = document.getElementById('new-spouse-royal-title').value.trim();
+            const spouseIsLeader = Boolean(document.getElementById('new-spouse-is-royal-leader').checked);
+            const spouseGender = document.querySelector('input[name="spouse-gender"]:checked').value;
+
+            idCounter++;
+            if (!Array.isArray(member.spouses)) member.spouses = [];
+            member.spouses.push({
+                id: `sp-${Date.now()}-${idCounter}`,
+                name: spouseName,
+                royalTitle: spouseRoyalTitle,
+                isRoyalLeader: spouseIsLeader,
+                gender: spouseGender,
+                note: note || (spouseGender === 'female' ? 'Istri' : 'Suami')
+            });
+
+            closeSpouseModal();
+            if (!memberModal.classList.contains('hidden') && document.getElementById('form-target-id').value === memberId) {
+                renderEditSpousesList(memberId);
+            }
+            renderApp();
+            showToast(`Pasangan "${spouseName}" berhasil ditambahkan!`);
+        });
+
+        // Tambah Generasi di Atasnya (Menambahkan Bapak atau Ibu di atas Generasi 1)
+        window.openAddParentModal = function(parentGender = 'male') {
+            const currentRoot = familyState.nodes[familyState.rootId];
+            if (!currentRoot) return;
+
+            if (getTreeMaxDepth() >= MAX_GENERATIONS) {
+                showToast('Kedalaman pohon sudah mencapai batas maksimal 100 generasi.', 'error');
+                return;
+            }
+
+            const isFemale = parentGender === 'female';
+            const parentLabel = isFemale ? 'Ibu (♀)' : 'Bapak (♂)';
+            const spouseLabel = isFemale ? 'Bapak / Suami (♂)' : 'Ibu / Istri (♀)';
+
+            document.getElementById('form-mode').value = 'add-above';
+            document.getElementById('form-target-id').value = currentRoot.id;
+            document.getElementById('member-modal-title').textContent = `Tambah ${parentLabel} di Atasnya`;
+            document.getElementById('member-modal-subtitle').textContent =
+                `Menjadi Generasi ke-1 baru di atas ${currentRoot.name} (otomatis menjadi Gen ke-2)`;
+            document.getElementById('label-input-name').textContent = `Nama Lengkap ${parentLabel} *`;
+
+            document.getElementById('input-name').value = '';
+            document.getElementById('input-royal-title').value = '';
+            delete royalLeaderCheckbox.dataset.manualToggled;
+            royalLeaderCheckbox.checked = false;
+
+            document.getElementById('gender-radio-male').checked = !isFemale;
+            document.getElementById('gender-radio-female').checked = isFemale;
+
+            document.getElementById('label-initial-spouse').textContent = `Pasangan ${spouseLabel} (Opsional)`;
+            document.getElementById('input-spouse').value = '';
+            document.getElementById('input-spouse-royal-title').value = '';
+            document.getElementById('input-spouse-gender').value = isFemale ? 'male' : 'female';
+            document.getElementById('input-spouse-note').value = isFemale ? 'Suami' : 'Istri';
+            document.getElementById('input-birth').value = '';
+            document.getElementById('input-death').value = '';
+            document.getElementById('input-notes').value = `${isFemale ? 'Ibu' : 'Bapak'} dari ${currentRoot.name}`;
+
+            document.getElementById('parent-spouse-selector-box').classList.add('hidden');
+            document.getElementById('add-initial-spouse-box').classList.remove('hidden');
+            document.getElementById('edit-spouses-manager').classList.add('hidden');
+
+            memberModal.classList.remove('hidden');
+            memberModal.classList.add('flex');
+            setTimeout(() => document.getElementById('input-name').focus(), 50);
+        };
+
+        window.openAddModal = function(parentId, preselectedSpouseId = '') {
+            const parent = familyState.nodes[parentId];
+            if (!parent) return;
+
+            const nextGen = getGeneration(parentId) + 1;
+            if (nextGen > MAX_GENERATIONS) {
+                showToast('Batas maksimal 100 generasi telah tercapai.', 'error');
+                return;
+            }
+
+            const chosenSpouse = preselectedSpouseId
+                ? (parent.spouses || []).find(s => s.id === preselectedSpouseId)
+                : ((parent.spouses && parent.spouses.length > 0) ? parent.spouses[0] : null);
+
+            document.getElementById('form-mode').value = 'add';
+            document.getElementById('form-target-id').value = parentId;
+            document.getElementById('member-modal-title').textContent = 'Tambah Keturunan Baru';
+            document.getElementById('member-modal-subtitle').textContent = chosenSpouse
+                ? `Generasi ke-${nextGen} • Anak dari ${parent.name} & ${chosenSpouse.name}`
+                : `Generasi ke-${nextGen} • Anak dari ${parent.name}`;
+            document.getElementById('label-input-name').textContent = 'Nama Lengkap *';
+
+            document.getElementById('input-name').value = '';
+            document.getElementById('input-royal-title').value = '';
+            delete royalLeaderCheckbox.dataset.manualToggled;
+            royalLeaderCheckbox.checked = false;
+
+            document.getElementById('gender-radio-male').checked = true;
+            document.getElementById('gender-radio-female').checked = false;
+
+            document.getElementById('label-initial-spouse').textContent = 'Pasangan Suami / Istri (Opsional)';
+            document.getElementById('input-spouse').value = '';
+            document.getElementById('input-spouse-royal-title').value = '';
+            document.getElementById('input-spouse-gender').value = 'female';
+            document.getElementById('input-spouse-note').value = '';
+            document.getElementById('input-birth').value = '';
+            document.getElementById('input-death').value = '';
+            document.getElementById('input-notes').value = '';
+
+            setupParentSpouseSelector(parent, preselectedSpouseId, true);
+            document.getElementById('add-initial-spouse-box').classList.remove('hidden');
+            document.getElementById('edit-spouses-manager').classList.add('hidden');
+
+            memberModal.classList.remove('hidden');
+            memberModal.classList.add('flex');
+            setTimeout(() => document.getElementById('input-name').focus(), 50);
+        };
+
+        window.openEditModal = function(nodeId) {
+            const node = familyState.nodes[nodeId];
+            if (!node) return;
+
+            document.getElementById('form-mode').value = 'edit';
+            document.getElementById('form-target-id').value = nodeId;
+            document.getElementById('member-modal-title').textContent = 'Edit Data Anggota';
+            document.getElementById('member-modal-subtitle').textContent = `Generasi ke-${getGeneration(nodeId)}`;
+            document.getElementById('label-input-name').textContent = 'Nama Lengkap *';
+
+            document.getElementById('input-name').value = node.name;
+            document.getElementById('input-royal-title').value = node.royalTitle || '';
+            royalLeaderCheckbox.dataset.manualToggled = 'true';
+            royalLeaderCheckbox.checked = Boolean(node.isRoyalLeader);
+
+            document.getElementById('gender-radio-male').checked = node.gender === 'male';
+            document.getElementById('gender-radio-female').checked = node.gender === 'female';
+            document.getElementById('input-birth').value = node.birthYear || '';
+            document.getElementById('input-death').value = node.deathYear || '';
+            document.getElementById('input-notes').value = node.notes || '';
+
+            if (node.parentId && familyState.nodes[node.parentId]) {
+                setupParentSpouseSelector(familyState.nodes[node.parentId], node.parentSpouseId || '', false);
+            } else {
+                document.getElementById('parent-spouse-selector-box').classList.add('hidden');
+            }
+
+            document.getElementById('add-initial-spouse-box').classList.add('hidden');
+            document.getElementById('edit-spouses-manager').classList.remove('hidden');
+            renderEditSpousesList(nodeId);
+
+            memberModal.classList.remove('hidden');
+            memberModal.classList.add('flex');
+            setTimeout(() => document.getElementById('input-name').focus(), 50);
+        };
+
+        document.getElementById('edit-modal-add-spouse-btn').addEventListener('click', () => {
+            const nodeId = document.getElementById('form-target-id').value;
+            if (nodeId) openAddSpouseModal(nodeId);
+        });
+
+        function closeMemberModal() {
+            memberModal.classList.add('hidden');
+            memberModal.classList.remove('flex');
+        }
+
+        document.querySelectorAll('.close-member-modal').forEach(btn => {
+            btn.addEventListener('click', closeMemberModal);
+        });
+
+        memberForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const mode = document.getElementById('form-mode').value;
+            const targetId = document.getElementById('form-target-id').value;
+            const name = document.getElementById('input-name').value.trim();
+            if (!name) return;
+
+            const royalTitle = document.getElementById('input-royal-title').value.trim();
+            const isRoyalLeader = Boolean(document.getElementById('input-is-royal-leader').checked);
+            const gender = document.querySelector('input[name="member-gender"]:checked').value;
+            const birthYear = document.getElementById('input-birth').value.trim();
+            const deathYear = document.getElementById('input-death').value.trim();
+            const notes = document.getElementById('input-notes').value.trim();
+
+            if (mode === 'add') {
+                const parent = familyState.nodes[targetId];
+                if (!parent) return;
+
+                const spouseName = document.getElementById('input-spouse').value.trim();
+                const spouseRoyalTitle = document.getElementById('input-spouse-royal-title').value.trim();
+                const spouseGender = document.getElementById('input-spouse-gender').value;
+                const spouseNote = document.getElementById('input-spouse-note').value.trim();
+                const parentSpouseId = document.getElementById('input-parent-spouse').value || null;
+                const spouses = [];
+                if (spouseName) {
+                    idCounter++;
+                    spouses.push({
+                        id: `sp-${Date.now()}-${idCounter}`,
+                        name: spouseName,
+                        royalTitle: spouseRoyalTitle,
+                        isRoyalLeader: isLeaderTitleString(spouseRoyalTitle),
+                        gender: spouseGender,
+                        note: spouseNote || (spouseGender === 'female' ? 'Istri' : 'Suami')
+                    });
+                }
+
+                idCounter++;
+                const newId = `m-${Date.now()}-${idCounter}`;
+                familyState.nodes[newId] = {
+                    id: newId,
+                    name,
+                    royalTitle,
+                    isRoyalLeader,
+                    spouses,
+                    gender,
+                    birthYear,
+                    deathYear,
+                    notes,
+                    parentId: targetId,
+                    parentSpouseId,
+                    childrenIds: [],
+                    collapsed: false
+                };
+
+                parent.childrenIds.push(newId);
+                parent.collapsed = false;
+
+                closeMemberModal();
+                renderApp();
+                focusOnMember(newId);
+                showToast(`${name} berhasil ditambahkan ke Generasi ke-${getGeneration(newId)}!`);
+            } else if (mode === 'add-above') {
+                const oldRoot = familyState.nodes[familyState.rootId];
+                if (!oldRoot) return;
+
+                const spouseName = document.getElementById('input-spouse').value.trim();
+                const spouseRoyalTitle = document.getElementById('input-spouse-royal-title').value.trim();
+                const spouseGender = document.getElementById('input-spouse-gender').value;
+                const spouseNote = document.getElementById('input-spouse-note').value.trim();
+                const spouses = [];
+                let initialSpouseId = null;
+                if (spouseName) {
+                    idCounter++;
+                    initialSpouseId = `sp-${Date.now()}-${idCounter}`;
+                    spouses.push({
+                        id: initialSpouseId,
+                        name: spouseName,
+                        royalTitle: spouseRoyalTitle,
+                        isRoyalLeader: isLeaderTitleString(spouseRoyalTitle),
+                        gender: spouseGender,
+                        note: spouseNote || (spouseGender === 'female' ? 'Istri' : 'Suami')
+                    });
+                }
+
+                idCounter++;
+                const newRootId = `m-top-${Date.now()}-${idCounter}`;
+                familyState.nodes[newRootId] = {
+                    id: newRootId,
+                    name,
+                    royalTitle,
+                    isRoyalLeader,
+                    spouses,
+                    gender,
+                    birthYear,
+                    deathYear,
+                    notes,
+                    parentId: null,
+                    parentSpouseId: null,
+                    childrenIds: [oldRoot.id],
+                    collapsed: false
+                };
+
+                oldRoot.parentId = newRootId;
+                oldRoot.parentSpouseId = initialSpouseId;
+                familyState.rootId = newRootId;
+
+                closeMemberModal();
+                renderApp();
+                focusOnMember(newRootId);
+                showToast(`${name} ditambahkan sebagai Generasi ke-1 di atas ${oldRoot.name}!`);
+            } else if (mode === 'edit') {
+                const node = familyState.nodes[targetId];
+                if (!node) return;
+                node.name = name;
+                node.royalTitle = royalTitle;
+                node.isRoyalLeader = isRoyalLeader;
+                node.gender = gender;
+                node.birthYear = birthYear;
+                node.deathYear = deathYear;
+                node.notes = notes;
+                if (node.parentId) {
+                    node.parentSpouseId = document.getElementById('input-parent-spouse').value || null;
+                }
+
+                (node.spouses || []).forEach(sp => {
+                    if (sp.linkedMemberId && familyState.nodes[sp.linkedMemberId]) {
+                        const partner = familyState.nodes[sp.linkedMemberId];
+                        const backRef = (partner.spouses || []).find(s => s.linkedMemberId === node.id);
+                        if (backRef) {
+                            backRef.name = node.name;
+                            backRef.royalTitle = node.royalTitle;
+                            backRef.isRoyalLeader = node.isRoyalLeader;
+                            backRef.gender = node.gender;
+                        }
+                    }
+                });
+
+                closeMemberModal();
+                renderApp();
+                showToast(`Data ${name} berhasil diperbarui.`);
+            }
+        });
+
+        window.toggleCollapse = function(nodeId) {
+            const node = familyState.nodes[nodeId];
+            if (!node) return;
+            node.collapsed = !node.collapsed;
+            renderApp();
+        };
+
+        window.confirmDeleteMember = function(nodeId) {
+            const node = familyState.nodes[nodeId];
+            if (!node) return;
+
+            if (nodeId === familyState.rootId) {
+                if ((node.childrenIds || []).length === 1) {
+                    const nextRootId = node.childrenIds[0];
+                    const nextRoot = familyState.nodes[nextRootId];
+                    openConfirmDialog(
+                        'Hapus Generasi Teratas?',
+                        `Hapus "${node.name}" dan jadikan "${nextRoot ? nextRoot.name : 'keturunan berikutnya'}" sebagai Generasi ke-1?`,
+                        () => {
+                            Object.values(familyState.nodes).forEach(other => {
+                                if (Array.isArray(other.spouses)) {
+                                    other.spouses = other.spouses.filter(s => s.linkedMemberId !== nodeId);
+                                }
+                            });
+                            if (nextRoot) {
+                                nextRoot.parentId = null;
+                                nextRoot.parentSpouseId = null;
+                                familyState.rootId = nextRoot.id;
+                            }
+                            delete familyState.nodes[nodeId];
+                            highlightedNodeIds.delete(nodeId);
+                            renderApp();
+                            showToast(`"${node.name}" dihapus. Generasi di bawahnya naik 1 tingkat.`);
+                        }
+                    );
+                } else {
+                    showToast('Leluhur utama yang memiliki lebih dari 1 cabang tidak dapat dihapus langsung.', 'error');
+                }
+                return;
+            }
+
+            const descCount = countDescendants(nodeId);
+            const msg = descCount > 0
+                ? `Apakah Anda yakin ingin menghapus "${node.name}" beserta ${descCount} keturunan di bawahnya?`
+                : `Apakah Anda yakin ingin menghapus "${node.name}" dari silsilah keluarga?`;
+
+            openConfirmDialog('Hapus Anggota Keluarga?', msg, () => {
+                function removeSubtree(id) {
+                    const target = familyState.nodes[id];
+                    if (!target) return;
+                    (target.childrenIds || []).forEach(removeSubtree);
+
+                    Object.values(familyState.nodes).forEach(other => {
+                        if (Array.isArray(other.spouses)) {
+                            other.spouses = other.spouses.filter(s => s.linkedMemberId !== id);
+                        }
+                    });
+
+                    highlightedNodeIds.delete(id);
+                    delete familyState.nodes[id];
+                }
+
+                if (node.parentId && familyState.nodes[node.parentId]) {
+                    const parent = familyState.nodes[node.parentId];
+                    parent.childrenIds = parent.childrenIds.filter(cid => cid !== nodeId);
+                }
+
+                removeSubtree(nodeId);
+                if (highlightedNodeIds.size === 0) {
+                    document.getElementById('highlight-banner').classList.add('hidden');
+                }
+                renderApp();
+                showToast(`"${node.name}" berhasil dihapus.`);
+            });
+        };
+
+        // =========================================================================
+        // FITUR CEK SILSILAH & HUBUNGAN KELUARGA
+        // =========================================================================
+        const checkerModal = document.getElementById('checker-modal');
+        const selectLineageMember = document.getElementById('select-lineage-member');
+        const selectRelA = document.getElementById('select-rel-a');
+        const selectRelB = document.getElementById('select-rel-b');
+
+        function populateMemberDropdowns(selectedId = null) {
+            const sortedMembers = Object.values(familyState.nodes).sort((a, b) => {
+                const genDiff = getGeneration(a.id) - getGeneration(b.id);
+                return genDiff !== 0 ? genDiff : a.name.localeCompare(b.name);
+            });
+
+            const optionsHTML = sortedMembers.map(m => {
+                const gen = getGeneration(m.id);
+                const genderSymbol = m.gender === 'female' ? '♀' : '♂';
+                const crownPrefix = m.isRoyalLeader ? '👑 ' : '';
+                const titleTag = m.royalTitle ? ` [${escapeHTML(m.royalTitle)}]` : '';
+                const spouseNames = (m.spouses || []).map(s => s.name).join(', ');
+                return `<option value="${m.id}">[Gen ${gen}] ${crownPrefix}${genderSymbol} ${escapeHTML(m.name)}${titleTag}${spouseNames ? ' & ' + escapeHTML(spouseNames) : ''}</option>`;
+            }).join('');
+
+            selectLineageMember.innerHTML = optionsHTML;
+            selectRelA.innerHTML = optionsHTML;
+            selectRelB.innerHTML = optionsHTML;
+
+            if (selectedId && familyState.nodes[selectedId]) {
+                selectLineageMember.value = selectedId;
+            } else if (sortedMembers.length > 0) {
+                selectLineageMember.value = sortedMembers[sortedMembers.length - 1].id;
+            }
+
+            if (sortedMembers.length >= 2) {
+                selectRelA.value = sortedMembers[0].id;
+                selectRelB.value = sortedMembers[sortedMembers.length - 1].id;
+            }
+        }
+
+        window.openLineageForMember = function(nodeId) {
+            populateMemberDropdowns(nodeId);
+            switchCheckerTab('lineage');
+            checkerModal.classList.remove('hidden');
+            checkerModal.classList.add('flex');
+        };
+
+        function renderLineageDetails(targetId) {
+            const box = document.getElementById('lineage-result-box');
+            const target = familyState.nodes[targetId];
+            if (!target) return;
+
+            const path = getAncestorsPath(targetId);
+            const descCount = countDescendants(targetId);
+            const directChildren = (target.childrenIds || []).filter(cid => familyState.nodes[cid]);
+
+            const chainHTML = path.map((member, idx) => {
+                const gen = idx + 1;
+                const isLast = idx === path.length - 1;
+                const spouseNames = (member.spouses || []).map(s => s.name).join(', ');
+                return `
+                    <div class="flex items-start gap-3">
+                        <div class="flex flex-col items-center">
+                            <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+                                ${isLast ? 'bg-amber-500 text-white shadow-sm' : 'bg-indigo-100 text-indigo-700'}">
+                                ${gen}
+                            </div>
+                            ${!isLast ? '<div class="w-0.5 h-6 bg-slate-300 my-0.5"></div>' : ''}
+                        </div>
+                        <div class="pb-1">
+                            <div class="text-sm font-bold ${isLast ? 'text-amber-800' : 'text-slate-800'}">
+                                ${member.isRoyalLeader ? '👑 ' : ''}${member.gender === 'female' ? '♀' : '♂'} ${escapeHTML(member.name)}
+                                ${member.royalTitle ? `<span class="inline-flex items-center px-1.5 py-0.2 ml-1 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">👑 ${escapeHTML(member.royalTitle)}</span>` : ''}
+                                ${spouseNames ? `<span class="text-xs font-normal text-slate-500">(&hearts; ${escapeHTML(spouseNames)})</span>` : ''}
+                            </div>
+                            <div class="text-xs text-slate-500">
+                                Generasi ke-${gen} ${gen === 1 ? '• Leluhur Utama' : ''} ${member.isRoyalLeader ? '• Pemimpin Kerajaan' : ''} ${isLast ? '• Anggota Dipilih' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            box.innerHTML = `
+                <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                    <div>
+                        <span class="text-xs font-semibold text-indigo-600 uppercase">Ringkasan Keturunan</span>
+                        <h4 class="text-base font-bold text-slate-800">${target.isRoyalLeader ? '👑 ' : ''}${escapeHTML(target.name)} (Generasi ke-${path.length})</h4>
+                    </div>
+                    <button type="button" onclick="applyLineageHighlight('${target.id}')"
+                        class="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-xl shadow-sm transition">
+                        Sorot di Pohon Utama
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="bg-white p-3 rounded-xl border border-slate-200">
+                        <div class="text-slate-500">Anak Langsung</div>
+                        <div class="text-base font-bold text-slate-800 mt-0.5">${directChildren.length} Orang</div>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-slate-200">
+                        <div class="text-slate-500">Total Keturunan di Bawahnya</div>
+                        <div class="text-base font-bold text-indigo-600 mt-0.5">${descCount} Orang</div>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="text-xs font-semibold text-slate-600 mb-2.5">Urutan Nasab dari Atas ke Bawah (${path.length} Generasi):</p>
+                    <div class="max-h-60 overflow-y-auto pr-2">
+                        ${chainHTML}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderRelationDetails() {
+            const box = document.getElementById('relation-result-box');
+            const idA = selectRelA.value;
+            const idB = selectRelB.value;
+            const res = analyzeRelationship(idA, idB);
+            if (!res) return;
+
+            box.innerHTML = `
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="text-xs font-bold uppercase tracking-wider text-indigo-600">Hasil Analisis Hubungan Kekerabatan</div>
+                    <button type="button" onclick="highlightDualLineage('${idA}', '${idB}')"
+                        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs transition">
+                        Sorot Kedua Jalur di Pohon
+                    </button>
+                </div>
+                <div class="text-base font-extrabold text-slate-900">${escapeHTML(res.title)}</div>
+                <p class="text-sm text-slate-700 leading-relaxed">${escapeHTML(res.description)}</p>
+                ${res.extraNote ? `
+                <div class="p-3 bg-white/90 border border-violet-200 rounded-xl text-xs text-violet-950 leading-relaxed">
+                    ${escapeHTML(res.extraNote)}
+                </div>` : ''}
+                <div class="pt-2 border-t border-indigo-200/70 text-xs text-slate-600">
+                    Leluhur Penghubung Terdekat: <strong>${escapeHTML(res.lca.name)}</strong> (Generasi ke-${getGeneration(res.lca.id)})
+                </div>
+            `;
+        }
+
+        function renderInterGenMarriagesList() {
+            const listBox = document.getElementById('intergen-list-box');
+            if (!listBox) return;
+
+            const seenPairs = new Set();
+            const marriages = [];
+
+            Object.values(familyState.nodes).forEach(node => {
+                (node.spouses || []).forEach(sp => {
+                    if (sp.linkedMemberId && familyState.nodes[sp.linkedMemberId]) {
+                        const pairKey = [node.id, sp.linkedMemberId].sort().join('::');
+                        if (!seenPairs.has(pairKey)) {
+                            seenPairs.add(pairKey);
+                            const partner = familyState.nodes[sp.linkedMemberId];
+                            const genA = getGeneration(node.id);
+                            const genB = getGeneration(partner.id);
+                            const rel = analyzeRelationship(node.id, partner.id);
+                            marriages.push({
+                                nodeA: node,
+                                nodeB: partner,
+                                genA,
+                                genB,
+                                diff: Math.abs(genA - genB),
+                                rel
+                            });
+                        }
+                    }
+                });
+            });
+
+            if (marriages.length === 0) {
+                listBox.innerHTML = `
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-center space-y-2">
+                        <div class="text-sm font-bold text-slate-700">Belum Ada Pernikahan Antar Anggota Silsilah</div>
+                        <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                            Untuk mencatat pernikahan antar generasi atau antar sepupu dalam keluarga, klik tombol <strong>+ Pasangan</strong> pada kartu anggota, lalu pilih tab <strong>Anggota Silsilah (Antar Gen)</strong>.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            listBox.innerHTML = marriages.map(m => `
+                <div class="bg-white border ${m.diff > 0 ? 'border-violet-300 shadow-xs' : 'border-slate-200'} rounded-2xl p-4 space-y-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${m.diff > 0 ? 'bg-violet-100 text-violet-800' : 'bg-emerald-100 text-emerald-800'}">
+                            ${m.diff > 0 ? `Pernikahan Antar Generasi (Selisih ${m.diff} Gen)` : `Pernikahan Sesama Generasi (Gen ${m.genA})`}
+                        </span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" onclick="openInterGenKinship('${m.nodeA.id}', '${m.nodeB.id}')"
+                                class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-lg transition">
+                                Analisis Detail
+                            </button>
+                            <button type="button" onclick="highlightDualLineage('${m.nodeA.id}', '${m.nodeB.id}')"
+                                class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition">
+                                Sorot Kedua Jalur
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-sm font-bold text-slate-900">
+                        ${m.nodeA.isRoyalLeader ? '👑 ' : ''}${m.nodeA.gender === 'female' ? '♀' : '♂'} ${escapeHTML(m.nodeA.name)} <span class="text-xs font-semibold text-slate-500">(Gen ${m.genA})</span>
+                        <span class="mx-1.5 text-rose-500">&hearts;</span>
+                        ${m.nodeB.isRoyalLeader ? '👑 ' : ''}${m.nodeB.gender === 'female' ? '♀' : '♂'} ${escapeHTML(m.nodeB.name)} <span class="text-xs font-semibold text-slate-500">(Gen ${m.genB})</span>
+                    </div>
+                    ${m.rel && m.rel.extraNote ? `
+                    <p class="text-xs text-slate-600 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        ${escapeHTML(m.rel.extraNote)}
+                    </p>` : ''}
+                </div>
+            `).join('');
+        }
+
+        window.highlightDualLineage = function(idA, idB) {
+            const nodeA = familyState.nodes[idA];
+            const nodeB = familyState.nodes[idB];
+            if (!nodeA || !nodeB) return;
+
+            const pathA = getAncestorsPath(idA);
+            const pathB = getAncestorsPath(idB);
+            highlightedNodeIds = new Set([...pathA.map(n => n.id), ...pathB.map(n => n.id)]);
+
+            document.getElementById('highlight-target-name').textContent =
+                `Jalur ${nodeA.name} (Gen ${pathA.length}) & ${nodeB.name} (Gen ${pathB.length})`;
+            document.getElementById('highlight-banner').classList.remove('hidden');
+
+            checkerModal.classList.add('hidden');
+            checkerModal.classList.remove('flex');
+
+            renderApp();
+            focusOnMember(idB);
+        };
+
+        window.openInterGenKinship = function(idA, idB) {
+            populateMemberDropdowns(idA);
+            selectRelA.value = idA;
+            selectRelB.value = idB;
+            switchCheckerTab('relation');
+            checkerModal.classList.remove('hidden');
+            checkerModal.classList.add('flex');
+        };
+
+        window.applyLineageHighlight = function(targetId) {
+            const target = familyState.nodes[targetId];
+            if (!target) return;
+
+            const path = getAncestorsPath(targetId);
+            highlightedNodeIds = new Set(path.map(n => n.id));
+
+            document.getElementById('highlight-target-name').textContent =
+                `${target.name} (Generasi ke-${path.length})`;
+            document.getElementById('highlight-banner').classList.remove('hidden');
+
+            checkerModal.classList.add('hidden');
+            checkerModal.classList.remove('flex');
+
+            renderApp();
+            focusOnMember(targetId);
+        };
+
+        function switchCheckerTab(tabName) {
+            const tabLineageBtn = document.getElementById('tab-lineage-btn');
+            const tabRelationBtn = document.getElementById('tab-relation-btn');
+            const tabIntergenBtn = document.getElementById('tab-intergen-btn');
+            const panelLineage = document.getElementById('panel-lineage');
+            const panelRelation = document.getElementById('panel-relation');
+            const panelIntergen = document.getElementById('panel-intergen');
+
+            const activeClass = 'px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl border-t border-x border-slate-200 bg-white text-indigo-600 -mb-px';
+            const inactiveClass = 'px-3.5 py-2.5 text-xs sm:text-sm font-medium rounded-t-xl text-slate-600 hover:text-slate-900';
+
+            tabLineageBtn.className = inactiveClass;
+            tabRelationBtn.className = inactiveClass;
+            tabIntergenBtn.className = inactiveClass;
+            panelLineage.classList.add('hidden');
+            panelRelation.classList.add('hidden');
+            panelIntergen.classList.add('hidden');
+
+            if (tabName === 'lineage') {
+                tabLineageBtn.className = activeClass;
+                panelLineage.classList.remove('hidden');
+                renderLineageDetails(selectLineageMember.value);
+            } else if (tabName === 'relation') {
+                tabRelationBtn.className = activeClass;
+                panelRelation.classList.remove('hidden');
+                renderRelationDetails();
+            } else {
+                tabIntergenBtn.className = activeClass;
+                panelIntergen.classList.remove('hidden');
+                renderInterGenMarriagesList();
+            }
+        }
+
+        document.getElementById('open-checker-btn').addEventListener('click', () => {
+            populateMemberDropdowns();
+            switchCheckerTab('lineage');
+            checkerModal.classList.remove('hidden');
+            checkerModal.classList.add('flex');
+        });
+
+        document.getElementById('close-checker-btn').addEventListener('click', () => {
+            checkerModal.classList.add('hidden');
+            checkerModal.classList.remove('flex');
+        });
+
+        document.getElementById('tab-lineage-btn').addEventListener('click', () => switchCheckerTab('lineage'));
+        document.getElementById('tab-relation-btn').addEventListener('click', () => switchCheckerTab('relation'));
+        document.getElementById('tab-intergen-btn').addEventListener('click', () => switchCheckerTab('intergen'));
+        selectLineageMember.addEventListener('change', (e) => renderLineageDetails(e.target.value));
+        selectRelA.addEventListener('change', renderRelationDetails);
+        selectRelB.addEventListener('change', renderRelationDetails);
+
+        document.getElementById('clear-highlight-btn').addEventListener('click', () => {
+            highlightedNodeIds.clear();
+            document.getElementById('highlight-banner').classList.add('hidden');
+            renderApp();
+        });
+
+        // =========================================================================
+        // PENCARIAN CEPAT ANGGOTA KELUARGA
+        // =========================================================================
+        const searchInput = document.getElementById('quick-search-input');
+        const clearSearchBtn = document.getElementById('clear-search-btn');
+        const searchDropdown = document.getElementById('search-results-dropdown');
+
+        window.selectSearchResult = function(memberId) {
+            searchDropdown.classList.add('hidden');
+            focusOnMember(memberId);
+        };
+
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.trim().toLowerCase();
+            if (!q) {
+                searchDropdown.classList.add('hidden');
+                clearSearchBtn.classList.add('hidden');
+                return;
+            }
+            clearSearchBtn.classList.remove('hidden');
+
+            const matches = Object.values(familyState.nodes).filter(m => {
+                const genText = `generasi ${getGeneration(m.id)} gen ${getGeneration(m.id)}`;
+                const leaderText = m.isRoyalLeader ? 'pemimpin kerajaan mahkota raja ratu sultan' : '';
+                const spouseMatch = (m.spouses || []).some(s =>
+                    s.name.toLowerCase().includes(q) ||
+                    (s.royalTitle && s.royalTitle.toLowerCase().includes(q))
+                );
+                return (
+                    m.name.toLowerCase().includes(q) ||
+                    (m.royalTitle && m.royalTitle.toLowerCase().includes(q)) ||
+                    leaderText.includes(q) ||
+                    spouseMatch ||
+                    (m.notes && m.notes.toLowerCase().includes(q)) ||
+                    genText.includes(q)
+                );
+            }).slice(0, 25);
+
+            if (matches.length === 0) {
+                searchDropdown.innerHTML = `<div class="p-4 text-xs text-slate-500 text-center">Tidak ada anggota keluarga yang cocok.</div>`;
+            } else {
+                searchDropdown.innerHTML = matches.map(m => {
+                    const gen = getGeneration(m.id);
+                    const parent = m.parentId ? familyState.nodes[m.parentId] : null;
+                    const sym = m.gender === 'female'
+                        ? '<span class="text-rose-600 font-bold">♀</span>'
+                        : '<span class="text-blue-600 font-bold">♂</span>';
+                    const crownTag = m.isRoyalLeader
+                        ? `<span class="inline-flex items-center gap-0.5 mr-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500 text-white">👑 Pemimpin</span>`
+                        : '';
+                    const titleBadge = m.royalTitle
+                        ? `<span class="ml-1 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300">👑 ${escapeHTML(m.royalTitle)}</span>`
+                        : '';
+                    return `
+                        <div class="px-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-2">
+                            <button type="button" onclick="selectSearchResult('${m.id}')" class="text-left flex-1">
+                                <div class="text-xs font-bold text-slate-800">${crownTag}${sym} ${escapeHTML(m.name)}${titleBadge}</div>
+                                <div class="text-[11px] text-slate-500">
+                                    Generasi ke-${gen} ${parent ? `• Anak dari ${escapeHTML(parent.name)}` : '• Leluhur Utama'}
+                                </div>
+                            </button>
+                            <button type="button" onclick="openLineageForMember('${m.id}'); document.getElementById('search-results-dropdown').classList.add('hidden');"
+                                class="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-[11px] font-semibold rounded-lg shrink-0">
+                                Cek Silsilah
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }
+            searchDropdown.classList.remove('hidden');
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearchBtn.classList.add('hidden');
+            searchDropdown.classList.add('hidden');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+                searchDropdown.classList.add('hidden');
+            }
+        });
+
+        // =========================================================================
+        // KELOLA DATA, GENERATOR RANTAI HINGGA 100 GENERASI, EKSPOR & IMPOR JSON
+        // =========================================================================
+        const toolsModal = document.getElementById('tools-modal');
+
+        document.getElementById('open-tools-btn').addEventListener('click', () => {
+            const startSelect = document.getElementById('gen-chain-start');
+            const sorted = Object.values(familyState.nodes).sort((a, b) => getGeneration(a.id) - getGeneration(b.id));
+            startSelect.innerHTML = sorted.map(m =>
+                `<option value="${m.id}">[Gen ${getGeneration(m.id)}] ${m.isRoyalLeader ? '👑 ' : ''}${escapeHTML(m.name)}</option>`
+            ).join('');
+            if (sorted.length > 0) {
+                const deepest = sorted[sorted.length - 1];
+                startSelect.value = deepest.id;
+                const currentGen = getGeneration(deepest.id);
+                document.getElementById('gen-chain-target').value = Math.min(100, Math.max(currentGen + 5, 10));
+            }
+
+            toolsModal.classList.remove('hidden');
+            toolsModal.classList.add('flex');
+        });
+
+        document.getElementById('close-tools-btn').addEventListener('click', () => {
+            toolsModal.classList.add('hidden');
+            toolsModal.classList.remove('flex');
+        });
+
+        // Membuat rantai keturunan bertingkat dari atas ke bawah hingga maksimal 100 generasi
+        document.getElementById('run-chain-gen-btn').addEventListener('click', () => {
+            const startId = document.getElementById('gen-chain-start').value;
+            let targetGen = parseInt(document.getElementById('gen-chain-target').value, 10);
+
+            if (isNaN(targetGen) || targetGen < 2) targetGen = 2;
+            if (targetGen > MAX_GENERATIONS) targetGen = MAX_GENERATIONS;
+
+            let currentNode = familyState.nodes[startId];
+            if (!currentNode) return;
+
+            let currentGen = getGeneration(currentNode.id);
+            if (targetGen <= currentGen) {
+                showToast(`Target generasi harus lebih besar dari Generasi ke-${currentGen}.`, 'error');
+                return;
+            }
+
+            let addedCount = 0;
+            while (currentGen < targetGen) {
+                currentGen++;
+                idCounter++;
+                const newId = `m-gen-${currentGen}-${idCounter}`;
+                const defaultSpouseId = currentNode.spouses && currentNode.spouses.length > 0
+                    ? currentNode.spouses[0].id
+                    : null;
+                const newNode = {
+                    id: newId,
+                    name: `Keturunan Generasi ke-${currentGen}`,
+                    royalTitle: '',
+                    isRoyalLeader: false,
+                    spouses: [],
+                    gender: currentGen % 2 === 0 ? 'male' : 'female',
+                    birthYear: '',
+                    deathYear: '',
+                    notes: `Klik ikon pensil untuk mengedit nama anggota Generasi ke-${currentGen}`,
+                    parentId: currentNode.id,
+                    parentSpouseId: defaultSpouseId,
+                    childrenIds: [],
+                    collapsed: false
+                };
+                familyState.nodes[newId] = newNode;
+                currentNode.childrenIds.push(newId);
+                currentNode.collapsed = false;
+                currentNode = newNode;
+                addedCount++;
+            }
+
+            toolsModal.classList.add('hidden');
+            toolsModal.classList.remove('flex');
+            renderApp();
+            focusOnMember(currentNode.id);
+            showToast(`Berhasil menambahkan ${addedCount} keturunan hingga Generasi ke-${targetGen}!`);
+        });
+
+        // Ekspor ke file JSON
+        document.getElementById('export-json-btn').addEventListener('click', () => {
+            const dataStr = JSON.stringify(familyState, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `silsilah-keluarga-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('File silsilah keluarga (.json) berhasil diunduh.');
+        });
+
+        // Impor dari file JSON
+        document.getElementById('import-json-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const parsed = JSON.parse(event.target.result);
+                    if (!parsed || !parsed.rootId || !parsed.nodes || !parsed.nodes[parsed.rootId]) {
+                        throw new Error('Format file tidak valid');
+                    }
+                    familyState = parsed;
+                    normalizeAllNodes();
+                    highlightedNodeIds.clear();
+                    document.getElementById('highlight-banner').classList.add('hidden');
+                    toolsModal.classList.add('hidden');
+                    toolsModal.classList.remove('flex');
+                    renderApp();
+                    showToast('Data silsilah keluarga berhasil dimuat!');
+                } catch (err) {
+                    showToast('Gagal memuat file JSON. Pastikan format file benar.', 'error');
+                }
+                e.target.value = '';
+            };
+            reader.readAsText(file);
+        });
+
+        // Reset ke 1 Anggota Utama
+        document.getElementById('reset-tree-btn').addEventListener('click', () => {
+            toolsModal.classList.add('hidden');
+            toolsModal.classList.remove('flex');
+            openConfirmDialog(
+                'Mulai Pohon Silsilah Baru?',
+                'Seluruh data saat ini akan diganti dengan 1 anggota awal (Generasi ke-1) yang siap Anda edit.',
+                () => {
+                    familyState = {
+                        rootId: 'm-root',
+                        nodes: {
+                            'm-root': {
+                                id: 'm-root',
+                                name: 'Leluhur Pertama',
+                                royalTitle: '',
+                                isRoyalLeader: false,
+                                spouses: [],
+                                gender: 'male',
+                                birthYear: '',
+                                deathYear: '',
+                                notes: 'Klik ikon pensil untuk mengedit nama & gelar kerajaan',
+                                parentId: null,
+                                parentSpouseId: null,
+                                childrenIds: [],
+                                collapsed: false
+                            }
+                        }
+                    };
+                    highlightedNodeIds.clear();
+                    document.getElementById('highlight-banner').classList.add('hidden');
+                    renderApp();
+                    showToast('Pohon silsilah baru telah dibuat.');
+                }
+            );
+        });
+
+        // =========================================================================
+        // FITUR UNDUH GAMBAR (PNG) & CETAK (PRINT / PDF)
+        // =========================================================================
+        async function downloadTreeAsPNG() {
+            if (typeof html2canvas === 'undefined') {
+                showToast('Pustaka gambar sedang dimuat. Silakan gunakan tombol Cetak -> Simpan PDF.', 'error');
+                return;
+            }
+
+            const wrapper = document.getElementById('tree-zoom-wrapper');
+            const treeRoot = document.getElementById('family-tree-root');
+            const prevTransform = wrapper.style.transform;
+
+            showToast('Menyiapkan gambar silsilah keluarga...');
+
+            document.querySelectorAll('#family-tree-root .no-print').forEach(el => {
+                el.style.visibility = 'hidden';
+            });
+            wrapper.style.transform = 'scale(1)';
+
+            try {
+                const canvas = await html2canvas(treeRoot, {
+                    backgroundColor: '#f8fafc',
+                    scale: 2,
+                    useCORS: true,
+                    logging: false
+                });
+                const link = document.createElement('a');
+                link.download = `silsilah-keluarga-${new Date().toISOString().slice(0, 10)}.png`;
+                link.href = canvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast('Gambar Pohon Silsilah (.PNG) berhasil diunduh!');
+            } catch (err) {
+                showToast('Gagal membuat gambar PNG. Silakan coba fitur Cetak.', 'error');
+            } finally {
+                wrapper.style.transform = prevTransform;
+                document.querySelectorAll('#family-tree-root .no-print').forEach(el => {
+                    el.style.visibility = '';
+                });
+            }
+        }
+
+        function printFamilyTree() {
+            toolsModal.classList.add('hidden');
+            toolsModal.classList.remove('flex');
+            setTimeout(() => {
+                window.print();
+            }, 120);
+        }
+
+        document.getElementById('download-png-btn').addEventListener('click', downloadTreeAsPNG);
+        document.getElementById('print-tree-btn').addEventListener('click', printFamilyTree);
+        document.getElementById('tools-download-png-btn').addEventListener('click', () => {
+            toolsModal.classList.add('hidden');
+            toolsModal.classList.remove('flex');
+            downloadTreeAsPNG();
+        });
+        document.getElementById('tools-print-btn').addEventListener('click', printFamilyTree);
+
+        // =========================================================================
+        // KONTROL ZOOM & GESER KANVAS (PAN / DRAG)
+        // =========================================================================
+        const viewport = document.getElementById('canvas-viewport');
+        const zoomWrapper = document.getElementById('tree-zoom-wrapper');
+        const zoomLabel = document.getElementById('zoom-level-label');
+
+        function applyZoom(newZoom) {
+            currentZoom = Math.min(1.6, Math.max(0.35, Number(newZoom.toFixed(2))));
+            zoomWrapper.style.transform = `scale(${currentZoom})`;
+            zoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
+        }
+
+        document.getElementById('zoom-in-btn').addEventListener('click', () => applyZoom(currentZoom + 0.1));
+        document.getElementById('zoom-out-btn').addEventListener('click', () => applyZoom(currentZoom - 0.1));
+        document.getElementById('zoom-reset-btn').addEventListener('click', () => {
+            applyZoom(1);
+            focusOnMember(familyState.rootId);
+        });
+
+        // Fitur Geser Kanvas dengan Mouse (Drag to Pan)
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let scrollLeft = 0;
+        let scrollTop = 0;
+
+        viewport.addEventListener('mousedown', (e) => {
+            if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
+            isDragging = true;
+            startX = e.pageX - viewport.offsetLeft;
+            startY = e.pageY - viewport.offsetTop;
+            scrollLeft = viewport.scrollLeft;
+            scrollTop = viewport.scrollTop;
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        viewport.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const x = e.pageX - viewport.offsetLeft;
+            const y = e.pageY - viewport.offsetTop;
+            viewport.scrollLeft = scrollLeft - (x - startX);
+            viewport.scrollTop = scrollTop - (y - startY);
+        });
+
+        // =========================================================================
+        // MODAL KONFIRMASI KUSTOM & TOAST NOTIFIKASI
+        // =========================================================================
+        const confirmModal = document.getElementById('confirm-modal');
+
+        function openConfirmDialog(title, message, onConfirm) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            confirmCallback = onConfirm;
+            confirmModal.classList.remove('hidden');
+            confirmModal.classList.add('flex');
+        }
+
+        document.getElementById('confirm-cancel-btn').addEventListener('click', () => {
+            confirmModal.classList.add('hidden');
+            confirmModal.classList.remove('flex');
+            confirmCallback = null;
+        });
+
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => {
+            confirmModal.classList.add('hidden');
+            confirmModal.classList.remove('flex');
+            if (typeof confirmCallback === 'function') confirmCallback();
+            confirmCallback = null;
+        });
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bg = type === 'error' ? 'bg-rose-600' : 'bg-slate-800';
+            toast.className = `${bg} text-white text-xs sm:text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg transition-all duration-300 opacity-0 translate-y-2`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('opacity-0', 'translate-y-2');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Inisialisasi Awal
+        window.onload = () => {
+            normalizeAllNodes();
+            renderApp();
+            setTimeout(() => {
+                const rootCard = document.getElementById(`card-${familyState.rootId}`);
+                if (rootCard) {
+                    rootCard.scrollIntoView({ behavior: 'auto', block: 'start', inline: 'center' });
+                }
+            }, 50);
+        };
+    </script>
+</body>
+</html>
